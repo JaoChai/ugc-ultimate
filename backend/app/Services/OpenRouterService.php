@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ApiKey;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\Client\RequestException;
 
 class OpenRouterService
@@ -147,7 +148,7 @@ class OpenRouterService
     }
 
     /**
-     * Streaming chat (returns generator)
+     * Streaming chat (returns generator) with proper error handling
      */
     public function streamChat(
         string $systemPrompt,
@@ -172,17 +173,67 @@ class OpenRouterService
             ->withOptions(['stream' => true])
             ->post($this->baseUrl . '/chat/completions', $payload);
 
+        // Check initial HTTP status for pre-stream errors
+        if (!$response->successful()) {
+            $error = $response->json();
+            $status = $response->status();
+            $message = match ($status) {
+                401 => 'Invalid API key',
+                402 => 'Insufficient credits',
+                429 => 'Rate limit exceeded',
+                503 => 'Service unavailable',
+                default => $error['error']['message'] ?? 'Stream initialization failed',
+            };
+            throw new \RuntimeException($message, $status);
+        }
+
         $body = $response->getBody();
+        $buffer = '';
 
         while (!$body->eof()) {
-            $line = $body->read(4096);
-            if (str_starts_with($line, 'data: ')) {
-                $data = substr($line, 6);
-                if ($data === '[DONE]') {
-                    break;
+            $chunk = $body->read(4096);
+            $buffer .= $chunk;
+
+            // Process complete lines from buffer
+            while (($pos = strpos($buffer, "\n")) !== false) {
+                $line = trim(substr($buffer, 0, $pos));
+                $buffer = substr($buffer, $pos + 1);
+
+                if (!str_starts_with($line, 'data: ')) {
+                    continue;
                 }
+
+                $data = substr($line, 6);
+
+                if ($data === '[DONE]') {
+                    return;
+                }
+
                 $json = json_decode($data, true);
-                if ($json && isset($json['choices'][0]['delta']['content'])) {
+                if (!$json) {
+                    continue;
+                }
+
+                // Check for mid-stream error
+                if (isset($json['error'])) {
+                    Log::error('OpenRouter streaming error', [
+                        'error' => $json['error'],
+                        'model' => $model,
+                    ]);
+                    throw new \RuntimeException(
+                        'Streaming error: ' . ($json['error']['message'] ?? 'Unknown error'),
+                        $json['error']['code'] ?? 500
+                    );
+                }
+
+                // Check for error finish reason
+                $finishReason = $json['choices'][0]['finish_reason'] ?? null;
+                if ($finishReason === 'error') {
+                    throw new \RuntimeException('OpenRouter generation error mid-stream');
+                }
+
+                // Yield content
+                if (isset($json['choices'][0]['delta']['content'])) {
                     yield $json['choices'][0]['delta']['content'];
                 }
             }
@@ -190,9 +241,9 @@ class OpenRouterService
     }
 
     /**
-     * Make HTTP request to OpenRouter
+     * Make HTTP request to OpenRouter with retry support for rate limiting
      */
-    protected function request(string $endpoint, array $payload): array
+    protected function request(string $endpoint, array $payload, int $retries = 0): array
     {
         try {
             $response = Http::withHeaders($this->getHeaders())
@@ -201,14 +252,52 @@ class OpenRouterService
 
             if (!$response->successful()) {
                 $error = $response->json();
-                throw new \RuntimeException(
-                    'OpenRouter API error: ' . ($error['error']['message'] ?? $response->body()),
-                    $response->status()
-                );
+                $status = $response->status();
+
+                // Auto-retry for rate limit (max 2 retries)
+                if ($status === 429 && $retries < 2) {
+                    $retryAfter = (int) $response->header('Retry-After', 5);
+                    $waitTime = min($retryAfter, 10); // Cap at 10 seconds
+
+                    Log::info('OpenRouter rate limited, retrying', [
+                        'retry_after' => $waitTime,
+                        'attempt' => $retries + 1,
+                        'model' => $payload['model'] ?? 'unknown',
+                    ]);
+
+                    sleep($waitTime);
+                    return $this->request($endpoint, $payload, $retries + 1);
+                }
+
+                // Map HTTP status codes to user-friendly messages
+                $message = match ($status) {
+                    400 => 'Bad request: ' . ($error['error']['message'] ?? 'Invalid parameters'),
+                    401 => 'Invalid API key',
+                    402 => 'Insufficient credits or payment required',
+                    403 => 'Content moderation: request flagged',
+                    408 => 'Request timeout',
+                    429 => 'Rate limit exceeded (retries exhausted)',
+                    502 => 'Model is currently unavailable',
+                    503 => 'OpenRouter service temporarily unavailable',
+                    default => $error['error']['message'] ?? 'Unknown error',
+                };
+
+                Log::warning('OpenRouter API Error', [
+                    'status' => $status,
+                    'message' => $message,
+                    'model' => $payload['model'] ?? 'unknown',
+                    'endpoint' => $endpoint,
+                ]);
+
+                throw new \RuntimeException($message, $status);
             }
 
             return $response->json();
         } catch (RequestException $e) {
+            Log::error('OpenRouter request failed', [
+                'error' => $e->getMessage(),
+                'endpoint' => $endpoint,
+            ]);
             throw new \RuntimeException('OpenRouter request failed: ' . $e->getMessage());
         }
     }
