@@ -48,7 +48,7 @@ function ApiKeyCard({ service, existingKey, onSave, onTest, testResult, isTestin
       await onSave(service, keyValue);
       setKeyValue('');
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 5000);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Failed to save');
     } finally {
@@ -242,10 +242,15 @@ export default function ApiKeys() {
           )
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      // Extract error message from API response
+      let errorMessage = 'Test failed';
+      if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = (error as { message: string }).message;
+      }
       setTestResults(prev => ({
         ...prev,
-        [id]: { success: false, message: 'Test failed' },
+        [id]: { success: false, message: errorMessage },
       }));
     } finally {
       setTestingId(null);

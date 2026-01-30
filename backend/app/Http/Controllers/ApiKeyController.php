@@ -125,7 +125,9 @@ class ApiKeyController extends Controller
             default => ['success' => false, 'message' => 'Unknown service'],
         };
 
-        return response()->json($result);
+        // Return appropriate HTTP status based on test result
+        $statusCode = $result['success'] ? 200 : 400;
+        return response()->json($result, $statusCode);
     }
 
     private function testKieApiKey(string $key, ApiKey $apiKey): array
