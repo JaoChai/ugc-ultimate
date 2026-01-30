@@ -140,15 +140,19 @@ class ApiKeyController extends Controller
             if ($response->successful()) {
                 $data = $response->json();
 
+                // kie.ai returns credits as integer in data field directly
+                // Response: {"code": 200, "msg": "success", "data": 100}
+                $credits = $data['data'] ?? 0;
+
                 $apiKey->update([
-                    'credits_remaining' => $data['data']['credits'] ?? 0,
+                    'credits_remaining' => $credits,
                     'last_used_at' => now(),
                 ]);
 
                 return [
                     'success' => true,
                     'message' => 'API key is valid',
-                    'credits' => $data['data']['credits'] ?? 0,
+                    'credits' => $credits,
                 ];
             }
 
