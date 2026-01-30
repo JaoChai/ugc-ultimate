@@ -67,21 +67,27 @@ UGC Ultimate - AI video generation platform สร้าง UGC content จา�
 
 See @README.md for detailed documentation.
 
-## Development Commands
+## Deployment (Production-First)
 
+**Deploy ตรงไป production** - ไม่ต้อง manual test ใน local
+
+| Service | Production URL |
+|---------|----------------|
+| Frontend | https://www.thinkclip.xyz |
+| API | https://api-production-9d0d.up.railway.app |
+
+### Workflow
+1. แก้โค้ด
+2. `npm run build` หรือ `php artisan route:list` (เช็ค syntax errors)
+3. commit → push to main
+4. รอ Railway deploy (~1-2 นาที)
+5. ทดสอบบน production URL
+6. ถ้ามีปัญหา: `git revert HEAD && git push`
+
+### Debug Production
 ```bash
-# Frontend (from /frontend)
-npm run dev          # Vite dev server :3000
-npm run build        # Production build
-
-# Backend (from /backend)
-composer dev         # RECOMMENDED: runs serve + queue + logs + vite concurrently
-php artisan serve    # API server only :8000
-php artisan queue:listen  # Queue worker only
-php artisan test     # PHPUnit tests
-
-# Docker (full stack)
-docker-compose up -d
+railway logs --service api
+railway logs --service frontend
 ```
 
 ## Critical Rules
