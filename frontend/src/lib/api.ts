@@ -1,4 +1,11 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// Ensure API URL always ends with /api
+const getApiBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl) return '/api';
+  // If URL doesn't end with /api, append it
+  return envUrl.endsWith('/api') ? envUrl : `${envUrl}/api`;
+};
+const API_BASE_URL = getApiBaseUrl();
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
