@@ -18,7 +18,7 @@ const navigation = [
   { name: 'Projects', href: '/projects', icon: FolderKanban },
   { name: 'Channels', href: '/channels', icon: Tv2 },
   { name: 'API Keys', href: '/settings/api-keys', icon: Key },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Settings', href: '/settings', icon: Settings, end: true },
 ];
 
 interface SidebarProps {
@@ -88,6 +88,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
           <NavLink
             key={item.name}
             to={item.href}
+            end={'end' in item ? item.end : false}
             onClick={onMobileClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
