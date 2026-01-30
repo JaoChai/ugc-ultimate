@@ -176,7 +176,7 @@ export interface Project {
 export interface Asset {
   id: number;
   project_id: number;
-  type: 'music' | 'image' | 'video_clip' | 'final_video' | 'thumbnail';
+  type: 'music' | 'image' | 'thumbnail';
   filename: string;
   url: string;
   size_bytes: number;
@@ -219,6 +219,95 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
+// Pipeline Types
+export interface Pipeline {
+  id: number;
+  project_id: number;
+  user_id: number;
+  mode: 'auto' | 'manual';
+  status: 'pending' | 'running' | 'paused' | 'completed' | 'failed';
+  current_step: string | null;
+  current_step_progress: number;
+  config: {
+    theme: string;
+    duration: number;
+    platform: string;
+  };
+  steps_state: Record<string, PipelineStepState>;
+  error_message: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  project?: { id: number; title: string };
+  logs?: PipelineLog[];
+}
+
+export interface PipelineStepState {
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  result: Record<string, any> | null;
+  error: string | null;
+  started_at?: string;
+  completed_at?: string;
+}
+
+export interface PipelineLog {
+  id: number;
+  pipeline_id: number;
+  agent_type: string;
+  log_type: 'info' | 'progress' | 'result' | 'error' | 'thinking';
+  message: string;
+  data: Record<string, any> | null;
+  created_at: string;
+}
+
+export interface PipelineEvent {
+  pipeline_id: number;
+  step: string;
+  progress: number;
+  status: string;
+  message?: string;
+  timestamp: string;
+}
+
+// Agent Config Types
+export interface AgentConfig {
+  id: number;
+  user_id: number;
+  agent_type: string;
+  name: string;
+  system_prompt: string;
+  model: string;
+  parameters: {
+    temperature: number;
+    max_tokens: number;
+  };
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const AGENT_TYPES = [
+  'theme_director',
+  'music_composer',
+  'visual_director',
+  'image_generator',
+  'video_composer',
+] as const;
+
+export type AgentType = (typeof AGENT_TYPES)[number];
+
+export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
+  theme_director: 'Theme Director',
+  music_composer: 'Music Composer',
+  visual_director: 'Visual Director',
+  image_generator: 'Image Generator',
+  video_composer: 'Video Composer',
+};
+
+export const PIPELINE_STEPS = AGENT_TYPES;
+
 // Projects API
 export const projectsApi = {
   list: (params?: { page?: string; status?: string }) =>
@@ -238,7 +327,7 @@ export const projectsApi = {
     apiClient.get<{
       project: Project;
       jobs: { total: number; pending: number; running: number; completed: number; failed: number };
-      assets: { music: number; images: number; video_clips: number; final_video: number };
+      assets: { music: number; images: number };
       progress: number;
     }>(`/projects/${id}/status`),
 
@@ -256,26 +345,14 @@ export const projectsApi = {
       data
     ),
 
-  generateVideos: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; video_count: number; project: Project }>(
-      `/projects/${id}/generate-videos`,
-      data
-    ),
-
   generateAll: (id: number, data: Record<string, any>) =>
     apiClient.post<{ message: string; project: Project; workflow: Record<string, string> }>(
       `/projects/${id}/generate-all`,
       data
     ),
 
-  compose: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; project: Project }>(`/projects/${id}/compose`, data),
-
-  recompose: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; project: Project }>(`/projects/${id}/recompose`, data),
-
   download: (id: number) =>
-    apiClient.get<{ download_url: string; filename: string; size_bytes: number; duration_seconds: number }>(
+    apiClient.get<{ assets: { type: string; download_url: string; filename: string; size_bytes: number }[] }>(
       `/projects/${id}/download`
     ),
 };
@@ -295,6 +372,84 @@ export const channelsApi = {
   delete: (id: number) => apiClient.delete<{ message: string }>(`/channels/${id}`),
 };
 
+// Pipelines API
+export const pipelinesApi = {
+  list: (params?: { page?: string }) => apiClient.get<PaginatedResponse<Pipeline>>('/pipelines', params),
+
+  create: (
+    projectId: number,
+    data: { mode?: 'auto' | 'manual'; theme?: string; duration?: number; platform?: string }
+  ) => apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/project/${projectId}`, data),
+
+  get: (id: number) => apiClient.get<{ pipeline: Pipeline }>(`/pipelines/${id}`),
+
+  start: (id: number) => apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/${id}/start`),
+
+  pause: (id: number) => apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/${id}/pause`),
+
+  resume: (id: number) => apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/${id}/resume`),
+
+  cancel: (id: number) => apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/${id}/cancel`),
+
+  runStep: (id: number, step: string) =>
+    apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/${id}/step`, { step }),
+
+  logs: (id: number, params?: { agent_type?: string; log_type?: string; page?: string }) =>
+    apiClient.get<PaginatedResponse<PipelineLog>>(`/pipelines/${id}/logs`, params),
+
+  stepResult: (id: number, step: string) =>
+    apiClient.get<{ step: string; state: PipelineStepState }>(`/pipelines/${id}/step/${step}`),
+};
+
+// Agent Configs API
+export const agentConfigsApi = {
+  list: () =>
+    apiClient.get<{
+      configs: AgentConfig[];
+      grouped: Record<string, AgentConfig[]>;
+      agent_types: string[];
+    }>('/agent-configs'),
+
+  create: (data: {
+    agent_type: string;
+    name: string;
+    system_prompt: string;
+    model?: string;
+    parameters?: { temperature?: number; max_tokens?: number };
+  }) => apiClient.post<{ message: string; config: AgentConfig }>('/agent-configs', data),
+
+  get: (id: number) => apiClient.get<{ config: AgentConfig }>(`/agent-configs/${id}`),
+
+  update: (
+    id: number,
+    data: {
+      name?: string;
+      system_prompt?: string;
+      model?: string;
+      parameters?: { temperature?: number; max_tokens?: number };
+    }
+  ) => apiClient.put<{ message: string; config: AgentConfig }>(`/agent-configs/${id}`, data),
+
+  delete: (id: number) => apiClient.delete<{ message: string }>(`/agent-configs/${id}`),
+
+  setDefault: (id: number) => apiClient.post<{ message: string; config: AgentConfig }>(`/agent-configs/${id}/set-default`),
+
+  resetToDefault: (id: number) => apiClient.post<{ message: string; config: AgentConfig }>(`/agent-configs/${id}/reset`),
+
+  getDefaultPrompt: (agentType: string) =>
+    apiClient.get<{
+      agent_type: string;
+      default_prompt: string;
+      default_model: string;
+      default_parameters: { temperature: number; max_tokens: number };
+    }>(`/agent-configs/defaults/${agentType}`),
+
+  test: (id: number, testPrompt: string) =>
+    apiClient.post<{ message: string; config: AgentConfig; test_prompt: string }>(`/agent-configs/${id}/test`, {
+      test_prompt: testPrompt,
+    }),
+};
+
 // Unified API object
 export const api = {
   ...apiClient,
@@ -308,4 +463,6 @@ export const api = {
   channels: channelsApi,
   auth: authApi,
   apiKeys: apiKeysApi,
+  pipelines: pipelinesApi,
+  agentConfigs: agentConfigsApi,
 };

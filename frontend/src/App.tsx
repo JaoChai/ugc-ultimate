@@ -8,9 +8,11 @@ import Dashboard from '@/pages/Dashboard';
 import Projects from '@/pages/Projects';
 import CreateProject from '@/pages/CreateProject';
 import ProjectDetail from '@/pages/ProjectDetail';
+import PipelineMonitor from '@/pages/PipelineMonitor';
 import Channels from '@/pages/Channels';
 import Settings from '@/pages/settings/Settings';
 import ApiKeys from '@/pages/settings/ApiKeys';
+import AgentConfig from '@/pages/settings/AgentConfig';
 
 function App() {
   return (
@@ -76,6 +78,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <ApiKeys />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/agents"
+            element={
+              <ProtectedRoute>
+                <AgentConfig />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pipelines/:id"
+            element={
+              <ProtectedRoute>
+                <PipelineMonitor />
               </ProtectedRoute>
             }
           />

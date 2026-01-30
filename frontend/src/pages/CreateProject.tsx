@@ -19,7 +19,6 @@ import { api } from '@/lib/api';
 import {
   Wand2,
   Music,
-  Video,
   Image,
   Sparkles,
   ChevronRight,
@@ -43,8 +42,8 @@ interface ProjectConfig {
   visualStyle: string;
   autoGenerate: boolean;
   musicProvider: string;
-  videoProvider: string;
   imageProvider: string;
+  imageResolution: string;
 }
 
 const defaultConfig: ProjectConfig = {
@@ -60,8 +59,8 @@ const defaultConfig: ProjectConfig = {
   visualStyle: 'cinematic',
   autoGenerate: true,
   musicProvider: 'suno',
-  videoProvider: 'kling',
-  imageProvider: 'flux',
+  imageProvider: 'nano-banana-pro',
+  imageResolution: '1K',
 };
 
 export default function CreateProject() {
@@ -74,7 +73,7 @@ export default function CreateProject() {
   const steps: { key: Step; label: string; icon: React.ReactNode }[] = [
     { key: 'basic', label: 'Basic Info', icon: <Sparkles className="h-4 w-4" /> },
     { key: 'concept', label: 'Concept', icon: <Wand2 className="h-4 w-4" /> },
-    { key: 'options', label: 'Options', icon: <Video className="h-4 w-4" /> },
+    { key: 'options', label: 'Options', icon: <Image className="h-4 w-4" /> },
     { key: 'review', label: 'Review', icon: <Check className="h-4 w-4" /> },
   ];
 
@@ -127,7 +126,7 @@ export default function CreateProject() {
       const projectId = projectRes.project.id;
 
       if (config.autoGenerate) {
-        // Start full generation workflow
+        // Start full generation workflow (Concept → Music + Images)
         await api.projects.generateAll(projectId, {
           theme: config.theme || config.title,
           duration: config.duration,
@@ -138,9 +137,8 @@ export default function CreateProject() {
           aspect_ratio: config.aspectRatio,
           visual_style: config.visualStyle,
           music_provider: config.musicProvider,
-          video_provider: config.videoProvider,
           image_provider: config.imageProvider,
-          auto_compose: true,
+          image_resolution: config.imageResolution,
         });
       }
 
@@ -158,7 +156,7 @@ export default function CreateProject() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold">Create New Project</h1>
           <p className="text-muted-foreground mt-1">
-            Generate an AI-powered music video in minutes
+            Generate AI-powered music and images in minutes
           </p>
         </div>
 
@@ -214,7 +212,7 @@ export default function CreateProject() {
                   <Label htmlFor="title">Project Title *</Label>
                   <Input
                     id="title"
-                    placeholder="My Awesome Music Video"
+                    placeholder="My Awesome Project"
                     value={config.title}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateConfig('title', e.target.value)}
                   />
@@ -245,7 +243,7 @@ export default function CreateProject() {
                     rows={4}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Describe the mood, setting, and story for your music video
+                    Describe the mood, setting, and story for your content
                   </p>
                 </div>
 
@@ -384,10 +382,10 @@ export default function CreateProject() {
                     <Sparkles className="h-4 w-4" />
                     AI Providers
                   </h4>
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2">
-                        <Music className="h-4 w-4" /> Music
+                        <Music className="h-4 w-4" /> Music (Suno v5)
                       </Label>
                       <Select
                         value={config.musicProvider}
@@ -397,7 +395,7 @@ export default function CreateProject() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="suno">Suno</SelectItem>
+                          <SelectItem value="suno">Suno v5</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -413,31 +411,27 @@ export default function CreateProject() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="flux">Flux</SelectItem>
-                          <SelectItem value="midjourney">Midjourney</SelectItem>
-                          <SelectItem value="dalle">DALL-E</SelectItem>
-                          <SelectItem value="ideogram">Ideogram</SelectItem>
+                          <SelectItem value="nano-banana-pro">Nano Banana Pro (4K)</SelectItem>
+                          <SelectItem value="nano-banana">Nano Banana (Fast)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="flex items-center gap-2">
-                        <Video className="h-4 w-4" /> Video
-                      </Label>
-                      <Select
-                        value={config.videoProvider}
-                        onValueChange={(v) => updateConfig('videoProvider', v)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="kling">Kling</SelectItem>
-                          <SelectItem value="hailuo">Hailuo</SelectItem>
-                          <SelectItem value="runway">Runway</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Image Resolution</Label>
+                    <Select
+                      value={config.imageResolution}
+                      onValueChange={(v) => updateConfig('imageResolution', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1K">1K (1024px) - Fast</SelectItem>
+                        <SelectItem value="2K">2K (2048px) - Balanced</SelectItem>
+                        <SelectItem value="4K">4K (4096px) - Best Quality</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -447,7 +441,7 @@ export default function CreateProject() {
                       Auto-Generate Everything
                     </Label>
                     <p className="text-sm text-muted-foreground">
-                      Automatically generate music, images, and video
+                      Automatically generate music and images
                     </p>
                   </div>
                   <Switch
@@ -504,15 +498,15 @@ export default function CreateProject() {
                     <dl className="space-y-1 text-sm">
                       <div className="flex justify-between">
                         <dt className="text-muted-foreground">Music</dt>
-                        <dd className="capitalize">{config.musicProvider}</dd>
+                        <dd>Suno v5</dd>
                       </div>
                       <div className="flex justify-between">
                         <dt className="text-muted-foreground">Images</dt>
-                        <dd className="capitalize">{config.imageProvider}</dd>
+                        <dd>{config.imageProvider === 'nano-banana-pro' ? 'Nano Banana Pro' : 'Nano Banana'}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Video</dt>
-                        <dd className="capitalize">{config.videoProvider}</dd>
+                        <dt className="text-muted-foreground">Resolution</dt>
+                        <dd>{config.imageResolution}</dd>
                       </div>
                     </dl>
                   </div>
@@ -525,8 +519,7 @@ export default function CreateProject() {
                       Auto-Generation Enabled
                     </h4>
                     <p className="text-sm text-muted-foreground">
-                      After creating the project, AI will automatically generate concept, music,
-                      images, videos, and compose the final video.
+                      After creating the project, AI will automatically generate concept, music, and images.
                     </p>
                   </div>
                 )}

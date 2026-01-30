@@ -1,7 +1,7 @@
 import { DashboardLayout } from '@/components/layout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { User, Key, Bell, Palette, ChevronRight } from 'lucide-react';
+import { User, Key, Bell, Palette, ChevronRight, Bot } from 'lucide-react';
 
 const settingsLinks = [
   {
@@ -9,6 +9,12 @@ const settingsLinks = [
     description: 'Manage your kie.ai and R2 API keys',
     href: '/settings/api-keys',
     icon: Key,
+  },
+  {
+    name: 'AI Agents',
+    description: 'Configure system prompts and models for pipeline agents',
+    href: '/settings/agents',
+    icon: Bot,
   },
   {
     name: 'Notifications',

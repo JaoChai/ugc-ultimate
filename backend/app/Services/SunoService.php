@@ -8,6 +8,16 @@ class SunoService
 {
     protected KieApiService $kieApi;
 
+    // Available Suno models
+    public const MODEL_V3_5 = 'chirp-v3-5';      // Legacy
+    public const MODEL_V4 = 'chirp-v4';          // Vocal quality
+    public const MODEL_V4_5 = 'chirp-v4-5';      // Smart prompts
+    public const MODEL_V4_5_PLUS = 'chirp-v4-5-plus';  // Richer sound
+    public const MODEL_V5 = 'chirp-v5';          // Latest - best quality
+
+    // Default model (v5)
+    public const DEFAULT_MODEL = self::MODEL_V5;
+
     public function __construct(KieApiService $kieApi)
     {
         $this->kieApi = $kieApi;
@@ -22,12 +32,12 @@ class SunoService
     /**
      * Generate music with custom lyrics
      *
-     * @param string $prompt Description of the song/style
+     * @param string $prompt Description of the song/style (max 1000 chars for v5)
      * @param string|null $lyrics Custom lyrics (optional)
      * @param string|null $title Song title (optional)
      * @param string|null $style Music style/genre (optional)
      * @param bool $instrumental Generate instrumental only
-     * @param string $model Suno model version (default: chirp-v3-5)
+     * @param string $model Suno model version (default: v5)
      */
     public function generate(
         string $prompt,
@@ -35,7 +45,7 @@ class SunoService
         ?string $title = null,
         ?string $style = null,
         bool $instrumental = false,
-        string $model = 'chirp-v3-5'
+        string $model = self::DEFAULT_MODEL
     ): array {
         $payload = [
             'prompt' => $prompt,
@@ -63,7 +73,7 @@ class SunoService
      */
     public function generateAuto(
         string $prompt,
-        string $model = 'chirp-v3-5'
+        string $model = self::DEFAULT_MODEL
     ): array {
         return $this->kieApi->post('/api/v1/suno/generate', [
             'prompt' => $prompt,
@@ -73,7 +83,19 @@ class SunoService
     }
 
     /**
-     * Extend an existing song
+     * Generate lyrics from a prompt (v5 feature)
+     *
+     * @param string $prompt Description of what the lyrics should be about
+     */
+    public function generateLyrics(string $prompt): array
+    {
+        return $this->kieApi->post('/api/v1/suno/lyrics', [
+            'prompt' => $prompt,
+        ]);
+    }
+
+    /**
+     * Extend an existing song (v5 enhanced - no artifacts)
      *
      * @param string $audioUrl URL of the audio to extend
      * @param string $prompt Extension prompt
@@ -82,12 +104,53 @@ class SunoService
     public function extend(
         string $audioUrl,
         string $prompt,
-        int $continueAt = 0
+        int $continueAt = 0,
+        string $model = self::DEFAULT_MODEL
     ): array {
         return $this->kieApi->post('/api/v1/suno/extend', [
             'audio_url' => $audioUrl,
             'prompt' => $prompt,
             'continue_at' => $continueAt,
+            'model' => $model,
+        ]);
+    }
+
+    /**
+     * Extract stems from audio (v5 feature)
+     * Separates vocals from instrumentals
+     *
+     * @param string $audioUrl URL of the audio to process
+     */
+    public function extractStems(string $audioUrl): array
+    {
+        return $this->kieApi->post('/api/v1/suno/stems', [
+            'audio_url' => $audioUrl,
+        ]);
+    }
+
+    /**
+     * Create a cover version in different style (v5 feature)
+     *
+     * @param string $audioUrl URL of the original audio
+     * @param string $style Target style/genre
+     */
+    public function createCover(string $audioUrl, string $style): array
+    {
+        return $this->kieApi->post('/api/v1/suno/cover', [
+            'audio_url' => $audioUrl,
+            'style' => $style,
+        ]);
+    }
+
+    /**
+     * Convert audio to MIDI (v5 feature)
+     *
+     * @param string $audioUrl URL of the audio to convert
+     */
+    public function convertToMidi(string $audioUrl): array
+    {
+        return $this->kieApi->post('/api/v1/suno/midi', [
+            'audio_url' => $audioUrl,
         ]);
     }
 
@@ -96,7 +159,7 @@ class SunoService
      */
     public function getTaskStatus(string $taskId): array
     {
-        return $this->kieApi->get('/api/v1/suno/task', ['task_id' => $taskId]);
+        return $this->kieApi->get('/api/v1/suno/record-info', ['task_id' => $taskId]);
     }
 
     /**
@@ -107,7 +170,7 @@ class SunoService
         $maxAttempts = $maxWaitSeconds / 5;
 
         return $this->kieApi->pollTaskStatus(
-            '/api/v1/suno/task',
+            '/api/v1/suno/record-info',
             $taskId,
             (int) $maxAttempts,
             5
@@ -122,9 +185,10 @@ class SunoService
         ?string $lyrics = null,
         ?string $title = null,
         ?string $style = null,
-        bool $instrumental = false
+        bool $instrumental = false,
+        string $model = self::DEFAULT_MODEL
     ): array {
-        $result = $this->generate($prompt, $lyrics, $title, $style, $instrumental);
+        $result = $this->generate($prompt, $lyrics, $title, $style, $instrumental, $model);
 
         $taskId = $result['task_id'] ?? null;
 
@@ -133,6 +197,40 @@ class SunoService
         }
 
         return $this->waitForCompletion($taskId);
+    }
+
+    /**
+     * Available Suno models
+     */
+    public static function getModels(): array
+    {
+        return [
+            self::MODEL_V3_5 => [
+                'name' => 'Suno v3.5',
+                'description' => 'Legacy - Structured songs',
+                'max_prompt_chars' => 500,
+            ],
+            self::MODEL_V4 => [
+                'name' => 'Suno v4',
+                'description' => 'Improved vocal quality',
+                'max_prompt_chars' => 1000,
+            ],
+            self::MODEL_V4_5 => [
+                'name' => 'Suno v4.5',
+                'description' => 'Smart prompts',
+                'max_prompt_chars' => 1000,
+            ],
+            self::MODEL_V4_5_PLUS => [
+                'name' => 'Suno v4.5+',
+                'description' => 'Richer sound',
+                'max_prompt_chars' => 1000,
+            ],
+            self::MODEL_V5 => [
+                'name' => 'Suno v5',
+                'description' => 'Latest - Studio quality, best musicality',
+                'max_prompt_chars' => 1000,
+            ],
+        ];
     }
 
     /**

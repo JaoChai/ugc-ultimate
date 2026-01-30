@@ -2,257 +2,301 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Process;
 
-class FFmpegService
+class FFMpegService
 {
     protected string $ffmpegPath;
     protected string $ffprobePath;
     protected string $tempDir;
+    protected R2StorageService $r2Storage;
 
-    public function __construct()
+    public function __construct(R2StorageService $r2Storage)
     {
-        $this->ffmpegPath = config('services.ffmpeg.path', 'ffmpeg');
-        $this->ffprobePath = config('services.ffmpeg.ffprobe_path', 'ffprobe');
+        $this->ffmpegPath = config('services.ffmpeg.path', '/usr/bin/ffmpeg');
+        $this->ffprobePath = config('services.ffmpeg.ffprobe_path', '/usr/bin/ffprobe');
         $this->tempDir = storage_path('app/temp');
+        $this->r2Storage = $r2Storage;
 
+        // Ensure temp directory exists
         if (!is_dir($this->tempDir)) {
             mkdir($this->tempDir, 0755, true);
         }
     }
 
     /**
-     * Combine video clips with audio
-     *
-     * @param array $videoClips Array of video file paths
-     * @param string $audioPath Path to audio file
-     * @param string $outputPath Output file path
-     * @param array $options Additional options
+     * Compose video from images and audio
      */
-    public function combineVideoWithAudio(
-        array $videoClips,
-        string $audioPath,
-        string $outputPath,
-        array $options = []
-    ): bool {
-        // Create concat file for video clips
-        $concatFile = $this->createConcatFile($videoClips);
+    public function composeVideo(
+        array $images,
+        ?string $audioUrl,
+        array $settings = []
+    ): array {
+        $jobId = Str::uuid()->toString();
+        $outputPath = "{$this->tempDir}/{$jobId}_output.mp4";
 
-        $resolution = $options['resolution'] ?? '1920x1080';
-        $fps = $options['fps'] ?? 30;
-        $videoBitrate = $options['video_bitrate'] ?? '5M';
-        $audioBitrate = $options['audio_bitrate'] ?? '192k';
+        try {
+            // Download all assets
+            $localImages = $this->downloadImages($images, $jobId);
+            $localAudio = $audioUrl ? $this->downloadAudio($audioUrl, $jobId) : null;
 
-        // Build FFmpeg command
-        $command = [
-            $this->ffmpegPath,
-            '-y', // Overwrite output
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', $concatFile, // Video input
-            '-i', $audioPath,  // Audio input
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '23',
-            '-b:v', $videoBitrate,
-            '-r', (string) $fps,
-            '-s', $resolution,
-            '-c:a', 'aac',
-            '-b:a', $audioBitrate,
-            '-map', '0:v:0', // Use video from first input
-            '-map', '1:a:0', // Use audio from second input
-            '-shortest',     // End when shortest stream ends
-            '-movflags', '+faststart',
-            $outputPath,
-        ];
+            // Get audio duration if available
+            $audioDuration = $localAudio ? $this->getMediaDuration($localAudio) : null;
 
-        $result = $this->runCommand($command);
-
-        // Cleanup temp concat file
-        @unlink($concatFile);
-
-        return $result;
-    }
-
-    /**
-     * Add text overlay to video (for lyrics, captions)
-     *
-     * @param string $inputPath Input video path
-     * @param string $outputPath Output video path
-     * @param array $textOverlays Array of text overlays with timing
-     */
-    public function addTextOverlay(
-        string $inputPath,
-        string $outputPath,
-        array $textOverlays,
-        array $options = []
-    ): bool {
-        $fontPath = $options['font'] ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
-        $fontSize = $options['font_size'] ?? 48;
-        $fontColor = $options['font_color'] ?? 'white';
-        $borderColor = $options['border_color'] ?? 'black';
-        $borderWidth = $options['border_width'] ?? 2;
-
-        // Build drawtext filter
-        $filters = [];
-        foreach ($textOverlays as $overlay) {
-            $text = $this->escapeText($overlay['text']);
-            $startTime = $overlay['start'] ?? 0;
-            $endTime = $overlay['end'] ?? $startTime + 3;
-            $position = $overlay['position'] ?? 'center';
-            $x = $overlay['x'] ?? $this->getXPosition($position);
-            $y = $overlay['y'] ?? $this->getYPosition($position);
-
-            $filters[] = sprintf(
-                "drawtext=text='%s':fontfile=%s:fontsize=%d:fontcolor=%s:borderw=%d:bordercolor=%s:x=%s:y=%s:enable='between(t,%s,%s)'",
-                $text,
-                $fontPath,
-                $fontSize,
-                $fontColor,
-                $borderWidth,
-                $borderColor,
-                $x,
-                $y,
-                $startTime,
-                $endTime
-            );
-        }
-
-        $filterString = implode(',', $filters);
-
-        $command = [
-            $this->ffmpegPath,
-            '-y',
-            '-i', $inputPath,
-            '-vf', $filterString,
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '23',
-            '-c:a', 'copy',
-            '-movflags', '+faststart',
-            $outputPath,
-        ];
-
-        return $this->runCommand($command);
-    }
-
-    /**
-     * Add animated lyrics overlay with timing
-     */
-    public function addLyricsOverlay(
-        string $inputPath,
-        string $outputPath,
-        string $lyrics,
-        array $timings,
-        array $options = []
-    ): bool {
-        $textOverlays = $this->parseLyricsToOverlays($lyrics, $timings, $options);
-        return $this->addTextOverlay($inputPath, $outputPath, $textOverlays, $options);
-    }
-
-    /**
-     * Concatenate video clips
-     */
-    public function concatenateVideos(
-        array $videoPaths,
-        string $outputPath,
-        array $options = []
-    ): bool {
-        $concatFile = $this->createConcatFile($videoPaths);
-
-        $command = [
-            $this->ffmpegPath,
-            '-y',
-            '-f', 'concat',
-            '-safe', '0',
-            '-i', $concatFile,
-            '-c', 'copy',
-            '-movflags', '+faststart',
-            $outputPath,
-        ];
-
-        // If transcoding is needed
-        if ($options['transcode'] ?? false) {
-            $command = [
-                $this->ffmpegPath,
-                '-y',
-                '-f', 'concat',
-                '-safe', '0',
-                '-i', $concatFile,
-                '-c:v', 'libx264',
-                '-preset', 'medium',
-                '-crf', '23',
-                '-c:a', 'aac',
-                '-b:a', '192k',
-                '-movflags', '+faststart',
+            // Build and execute FFmpeg command
+            $command = $this->buildComposeCommand(
+                $localImages,
+                $localAudio,
                 $outputPath,
+                $audioDuration,
+                $settings
+            );
+
+            $this->executeCommand($command);
+
+            // Upload to R2
+            $r2Url = $this->uploadToR2($outputPath, $jobId);
+
+            // Cleanup
+            $this->cleanup($jobId);
+
+            return [
+                'success' => true,
+                'video_url' => $r2Url,
+                'duration' => $this->getMediaDuration($outputPath),
+                'job_id' => $jobId,
             ];
+
+        } catch (\Exception $e) {
+            $this->cleanup($jobId);
+            throw $e;
         }
-
-        $result = $this->runCommand($command);
-        @unlink($concatFile);
-
-        return $result;
     }
 
     /**
-     * Add transition between video clips
+     * Download images to local temp directory
      */
-    public function addTransitions(
-        array $videoPaths,
+    protected function downloadImages(array $images, string $jobId): array
+    {
+        $localPaths = [];
+
+        foreach ($images as $index => $image) {
+            $url = $image['url'] ?? $image['image_url'] ?? '';
+            if (empty($url)) continue;
+
+            $extension = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
+            $localPath = "{$this->tempDir}/{$jobId}_image_{$index}.{$extension}";
+
+            $response = Http::timeout(60)->get($url);
+            if ($response->successful()) {
+                file_put_contents($localPath, $response->body());
+                $localPaths[] = [
+                    'path' => $localPath,
+                    'duration' => $image['duration'] ?? 5,
+                    'transition_in' => $image['transition_in'] ?? 'fade',
+                    'transition_out' => $image['transition_out'] ?? 'fade',
+                    'ken_burns' => $image['ken_burns'] ?? ['zoom' => 1.05, 'direction' => 'up'],
+                ];
+            }
+        }
+
+        return $localPaths;
+    }
+
+    /**
+     * Download audio to local temp directory
+     */
+    protected function downloadAudio(string $url, string $jobId): string
+    {
+        $extension = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'mp3';
+        $localPath = "{$this->tempDir}/{$jobId}_audio.{$extension}";
+
+        $response = Http::timeout(120)->get($url);
+        if (!$response->successful()) {
+            throw new \RuntimeException('Failed to download audio');
+        }
+
+        file_put_contents($localPath, $response->body());
+        return $localPath;
+    }
+
+    /**
+     * Build FFmpeg compose command
+     */
+    protected function buildComposeCommand(
+        array $images,
+        ?string $audioPath,
         string $outputPath,
-        string $transition = 'fade',
-        float $duration = 0.5
-    ): bool {
-        if (count($videoPaths) < 2) {
-            return $this->concatenateVideos($videoPaths, $outputPath);
+        ?float $audioDuration,
+        array $settings
+    ): array {
+        $width = $settings['width'] ?? 1920;
+        $height = $settings['height'] ?? 1080;
+        $fps = $settings['fps'] ?? 30;
+        $transitionDuration = $settings['transition_duration'] ?? 0.5;
+
+        // Calculate total duration
+        $totalDuration = array_sum(array_column($images, 'duration'));
+        if ($audioDuration && $audioDuration > $totalDuration) {
+            // Extend last image to match audio
+            $images[count($images) - 1]['duration'] += ($audioDuration - $totalDuration);
         }
 
-        // Build complex filter for transitions
-        $inputs = '';
-        $filterComplex = '';
-        $lastOutput = '';
+        // Build filter complex for Ken Burns and transitions
+        $filterComplex = $this->buildFilterComplex($images, $width, $height, $fps, $transitionDuration);
 
-        foreach ($videoPaths as $i => $path) {
-            $inputs .= "-i {$path} ";
+        $command = [$this->ffmpegPath, '-y'];
+
+        // Add image inputs
+        foreach ($images as $image) {
+            $command = array_merge($command, [
+                '-loop', '1',
+                '-t', (string)$image['duration'],
+                '-i', $image['path'],
+            ]);
         }
 
-        // Create filter for each transition
-        for ($i = 0; $i < count($videoPaths) - 1; $i++) {
-            $input1 = $i === 0 ? "[0:v]" : $lastOutput;
-            $input2 = "[" . ($i + 1) . ":v]";
-            $outputLabel = "[v" . ($i + 1) . "]";
-            $lastOutput = $outputLabel;
-
-            $offset = $this->getVideoDuration($videoPaths[$i]) - $duration;
-
-            $filterComplex .= "{$input1}{$input2}xfade=transition={$transition}:duration={$duration}:offset={$offset}{$outputLabel};";
+        // Add audio input if available
+        if ($audioPath) {
+            $command = array_merge($command, ['-i', $audioPath]);
         }
 
-        // Audio crossfade
-        $audioFilter = '';
-        for ($i = 0; $i < count($videoPaths) - 1; $i++) {
-            $input1 = $i === 0 ? "[0:a]" : "[a" . $i . "]";
-            $input2 = "[" . ($i + 1) . ":a]";
-            $outputLabel = "[a" . ($i + 1) . "]";
+        // Add filter complex
+        $command = array_merge($command, [
+            '-filter_complex', $filterComplex,
+            '-map', '[outv]',
+        ]);
 
-            $offset = $this->getVideoDuration($videoPaths[$i]) - $duration;
-            $audioFilter .= "{$input1}{$input2}acrossfade=d={$duration}:c1=tri:c2=tri{$outputLabel};";
+        // Map audio if available
+        if ($audioPath) {
+            $audioIndex = count($images);
+            $command = array_merge($command, ['-map', "{$audioIndex}:a"]);
         }
 
-        $filterComplex = trim($filterComplex . $audioFilter, ';');
+        // Output settings
+        $command = array_merge($command, [
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-shortest',
+            $outputPath,
+        ]);
 
-        $command = $inputs . " -filter_complex \"{$filterComplex}\" -map \"{$lastOutput}\" -map \"[a" . (count($videoPaths) - 1) . "]\" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 192k -movflags +faststart {$outputPath}";
-
-        return $this->runCommand([$this->ffmpegPath, '-y'] + explode(' ', trim($command)));
+        return $command;
     }
 
     /**
-     * Get video duration
+     * Build FFmpeg filter complex for Ken Burns effect and crossfade
      */
-    public function getVideoDuration(string $path): float
+    protected function buildFilterComplex(
+        array $images,
+        int $width,
+        int $height,
+        int $fps,
+        float $transitionDuration
+    ): string {
+        $filters = [];
+        $count = count($images);
+
+        // Process each image with Ken Burns effect
+        foreach ($images as $i => $image) {
+            $duration = $image['duration'];
+            $kenBurns = $image['ken_burns'];
+            $zoom = $kenBurns['zoom'] ?? 1.05;
+            $direction = $kenBurns['direction'] ?? 'up';
+
+            // Calculate zoom parameters
+            $frames = (int)($duration * $fps);
+            $zoomStep = ($zoom - 1) / $frames;
+
+            // Ken Burns zoompan filter
+            $x = match($direction) {
+                'left' => "iw/2-(iw/zoom/2)+'on/{$frames}*(iw-iw/zoom)'",
+                'right' => "iw/2-(iw/zoom/2)-'on/{$frames}*(iw-iw/zoom)'",
+                default => "iw/2-(iw/zoom/2)",
+            };
+
+            $y = match($direction) {
+                'up' => "ih/2-(ih/zoom/2)+'on/{$frames}*(ih-ih/zoom)'",
+                'down' => "ih/2-(ih/zoom/2)-'on/{$frames}*(ih-ih/zoom)'",
+                default => "ih/2-(ih/zoom/2)",
+            };
+
+            $filters[] = "[{$i}:v]scale={$width}:{$height}:force_original_aspect_ratio=decrease,pad={$width}:{$height}:(ow-iw)/2:(oh-ih)/2,zoompan=z='min(zoom+{$zoomStep},1.5)':x='{$x}':y='{$y}':d={$frames}:s={$width}x{$height}:fps={$fps},setsar=1[v{$i}]";
+        }
+
+        // Apply crossfade transitions between clips
+        if ($count > 1) {
+            $prevLabel = 'v0';
+            for ($i = 1; $i < $count; $i++) {
+                $offset = array_sum(array_slice(array_column($images, 'duration'), 0, $i)) - $transitionDuration;
+                $outputLabel = $i === $count - 1 ? 'outv' : "cf{$i}";
+                $filters[] = "[{$prevLabel}][v{$i}]xfade=transition=fade:duration={$transitionDuration}:offset={$offset}[{$outputLabel}]";
+                $prevLabel = $outputLabel;
+            }
+        } else {
+            $filters[] = "[v0]copy[outv]";
+        }
+
+        return implode(';', $filters);
+    }
+
+    /**
+     * Add Ken Burns effect to a single image
+     */
+    public function addKenBurnsEffect(
+        string $imagePath,
+        float $duration,
+        string $outputPath,
+        array $kenBurns = []
+    ): string {
+        $zoom = $kenBurns['zoom'] ?? 1.05;
+        $direction = $kenBurns['direction'] ?? 'up';
+        $width = 1920;
+        $height = 1080;
+        $fps = 30;
+        $frames = (int)($duration * $fps);
+
+        $zoomStep = ($zoom - 1) / $frames;
+
+        $x = match($direction) {
+            'left' => "iw/2-(iw/zoom/2)+'on/{$frames}*(iw-iw/zoom)'",
+            'right' => "iw/2-(iw/zoom/2)-'on/{$frames}*(iw-iw/zoom)'",
+            default => "iw/2-(iw/zoom/2)",
+        };
+
+        $y = match($direction) {
+            'up' => "ih/2-(ih/zoom/2)+'on/{$frames}*(ih-ih/zoom)'",
+            'down' => "ih/2-(ih/zoom/2)-'on/{$frames}*(ih-ih/zoom)'",
+            default => "ih/2-(ih/zoom/2)",
+        };
+
+        $command = [
+            $this->ffmpegPath, '-y',
+            '-loop', '1',
+            '-i', $imagePath,
+            '-vf', "scale={$width}:{$height}:force_original_aspect_ratio=decrease,pad={$width}:{$height}:(ow-iw)/2:(oh-ih)/2,zoompan=z='min(zoom+{$zoomStep},1.5)':x='{$x}':y='{$y}':d={$frames}:s={$width}x{$height}:fps={$fps}",
+            '-t', (string)$duration,
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            $outputPath,
+        ];
+
+        $this->executeCommand($command);
+        return $outputPath;
+    }
+
+    /**
+     * Get media duration
+     */
+    public function getMediaDuration(string $path): float
     {
         $command = [
             $this->ffprobePath,
@@ -262,224 +306,94 @@ class FFmpegService
             $path,
         ];
 
-        $result = Process::run(implode(' ', $command));
+        $process = new Process($command);
+        $process->run();
 
-        return (float) trim($result->output());
-    }
-
-    /**
-     * Get video info (resolution, fps, codec)
-     */
-    public function getVideoInfo(string $path): array
-    {
-        $command = [
-            $this->ffprobePath,
-            '-v', 'error',
-            '-select_streams', 'v:0',
-            '-show_entries', 'stream=width,height,r_frame_rate,codec_name',
-            '-of', 'json',
-            $path,
-        ];
-
-        $result = Process::run(implode(' ', $command));
-        $data = json_decode($result->output(), true);
-
-        $stream = $data['streams'][0] ?? [];
-
-        // Parse frame rate
-        $fps = 30;
-        if (!empty($stream['r_frame_rate'])) {
-            $parts = explode('/', $stream['r_frame_rate']);
-            $fps = count($parts) === 2 ? (int) $parts[0] / (int) $parts[1] : (int) $parts[0];
+        if (!$process->isSuccessful()) {
+            return 0;
         }
 
-        return [
-            'width' => $stream['width'] ?? 0,
-            'height' => $stream['height'] ?? 0,
-            'fps' => $fps,
-            'codec' => $stream['codec_name'] ?? 'unknown',
-            'duration' => $this->getVideoDuration($path),
-        ];
+        return (float)trim($process->getOutput());
     }
 
     /**
-     * Resize video
+     * Execute FFmpeg command
      */
-    public function resize(
-        string $inputPath,
-        string $outputPath,
-        int $width,
-        int $height
-    ): bool {
-        $command = [
-            $this->ffmpegPath,
-            '-y',
-            '-i', $inputPath,
-            '-vf', "scale={$width}:{$height}:force_original_aspect_ratio=decrease,pad={$width}:{$height}:(ow-iw)/2:(oh-ih)/2",
-            '-c:v', 'libx264',
-            '-preset', 'medium',
-            '-crf', '23',
-            '-c:a', 'copy',
-            '-movflags', '+faststart',
-            $outputPath,
-        ];
-
-        return $this->runCommand($command);
-    }
-
-    /**
-     * Extract thumbnail from video
-     */
-    public function extractThumbnail(
-        string $inputPath,
-        string $outputPath,
-        float $timestamp = 1.0
-    ): bool {
-        $command = [
-            $this->ffmpegPath,
-            '-y',
-            '-i', $inputPath,
-            '-ss', (string) $timestamp,
-            '-vframes', '1',
-            '-q:v', '2',
-            $outputPath,
-        ];
-
-        return $this->runCommand($command);
-    }
-
-    /**
-     * Create concat file for FFmpeg
-     */
-    protected function createConcatFile(array $files): string
+    protected function executeCommand(array $command): void
     {
-        $concatFile = $this->tempDir . '/' . Str::uuid() . '.txt';
-        $content = '';
+        $process = new Process($command);
+        $process->setTimeout(600); // 10 minutes timeout
 
-        foreach ($files as $file) {
-            $content .= "file '" . addslashes($file) . "'\n";
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
         }
-
-        file_put_contents($concatFile, $content);
-
-        return $concatFile;
     }
 
     /**
-     * Run FFmpeg command
+     * Upload video to R2 storage
      */
-    protected function runCommand(array $command): bool
+    protected function uploadToR2(string $localPath, string $jobId): string
     {
-        $commandString = implode(' ', array_map('escapeshellarg', $command));
+        $filename = "videos/{$jobId}.mp4";
+        $content = file_get_contents($localPath);
 
-        Log::info('Running FFmpeg command', ['command' => $commandString]);
-
-        $result = Process::timeout(600)->run($commandString);
-
-        if (!$result->successful()) {
-            Log::error('FFmpeg command failed', [
-                'command' => $commandString,
-                'error' => $result->errorOutput(),
-            ]);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Escape text for FFmpeg drawtext filter
-     */
-    protected function escapeText(string $text): string
-    {
-        // Escape special characters for FFmpeg
-        $text = str_replace(['\\', "'", ':', '%'], ['\\\\', "\\'", '\\:', '\\%'], $text);
-        return $text;
-    }
-
-    /**
-     * Get X position based on position name
-     */
-    protected function getXPosition(string $position): string
-    {
-        return match ($position) {
-            'left' => '50',
-            'right' => 'w-tw-50',
-            'center' => '(w-tw)/2',
-            default => '(w-tw)/2',
-        };
-    }
-
-    /**
-     * Get Y position based on position name
-     */
-    protected function getYPosition(string $position): string
-    {
-        return match ($position) {
-            'top' => '50',
-            'bottom' => 'h-th-100',
-            'center' => '(h-th)/2',
-            default => 'h-th-100', // Default to bottom
-        };
-    }
-
-    /**
-     * Parse lyrics string to text overlays with timing
-     */
-    protected function parseLyricsToOverlays(string $lyrics, array $timings, array $options = []): array
-    {
-        $lines = array_filter(array_map('trim', explode("\n", $lyrics)));
-        $overlays = [];
-
-        foreach ($lines as $i => $line) {
-            // Skip section markers like [Verse 1], [Chorus], etc.
-            if (preg_match('/^\[.*\]$/', $line)) {
-                continue;
-            }
-
-            $timing = $timings[$i] ?? null;
-            if (!$timing) {
-                continue;
-            }
-
-            $overlays[] = [
-                'text' => $line,
-                'start' => $timing['start'] ?? 0,
-                'end' => $timing['end'] ?? ($timing['start'] ?? 0) + 3,
-                'position' => $options['lyrics_position'] ?? 'bottom',
-            ];
-        }
-
-        return $overlays;
-    }
-
-    /**
-     * Download file from URL to temp directory
-     */
-    public function downloadToTemp(string $url): string
-    {
-        $extension = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'mp4';
-        $tempPath = $this->tempDir . '/' . Str::uuid() . '.' . $extension;
-
-        $contents = file_get_contents($url);
-        if ($contents === false) {
-            throw new \RuntimeException('Failed to download file from URL');
-        }
-
-        file_put_contents($tempPath, $contents);
-
-        return $tempPath;
+        return $this->r2Storage->upload($filename, $content, 'video/mp4');
     }
 
     /**
      * Cleanup temp files
      */
-    public function cleanupTempFiles(array $files): void
+    protected function cleanup(string $jobId): void
     {
-        foreach ($files as $file) {
-            if (file_exists($file) && strpos($file, $this->tempDir) === 0) {
-                @unlink($file);
+        $pattern = "{$this->tempDir}/{$jobId}_*";
+        foreach (glob($pattern) as $file) {
+            if (is_file($file)) {
+                unlink($file);
             }
         }
+    }
+
+    /**
+     * Get video info
+     */
+    public function getVideoInfo(string $path): array
+    {
+        $command = [
+            $this->ffprobePath,
+            '-v', 'quiet',
+            '-print_format', 'json',
+            '-show_format',
+            '-show_streams',
+            $path,
+        ];
+
+        $process = new Process($command);
+        $process->run();
+
+        if (!$process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        return json_decode($process->getOutput(), true);
+    }
+
+    /**
+     * Extract thumbnail from video
+     */
+    public function extractThumbnail(string $videoPath, string $outputPath, float $timestamp = 0): string
+    {
+        $command = [
+            $this->ffmpegPath, '-y',
+            '-ss', (string)$timestamp,
+            '-i', $videoPath,
+            '-vframes', '1',
+            '-vf', 'scale=640:-1',
+            $outputPath,
+        ];
+
+        $this->executeCommand($command);
+        return $outputPath;
     }
 }

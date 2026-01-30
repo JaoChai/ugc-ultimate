@@ -10,12 +10,9 @@ import { api } from '@/lib/api';
 import type { Project, Asset } from '@/lib/api';
 import {
   ArrowLeft,
-  Play,
   Download,
   Music,
   Image,
-  Video,
-  FileVideo,
   Clock,
   CheckCircle2,
   XCircle,
@@ -37,8 +34,6 @@ interface ProjectStatus {
   assets: {
     music: number;
     images: number;
-    video_clips: number;
-    final_video: number;
   };
   progress: number;
 }
@@ -125,15 +120,6 @@ export default function ProjectDetail() {
         case 'generate-images':
           await api.projects.generateImages(projectId, { use_concept: true });
           break;
-        case 'generate-videos':
-          await api.projects.generateVideos(projectId, { use_concept: true });
-          break;
-        case 'compose':
-          await api.projects.compose(projectId, {
-            transitions: true,
-            add_lyrics: true,
-          });
-          break;
         case 'generate-all':
           await api.projects.generateAll(projectId, {
             theme: status?.project.title,
@@ -150,11 +136,18 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = async (assetUrl?: string) => {
+    if (assetUrl) {
+      window.open(assetUrl, '_blank');
+      return;
+    }
     if (!id) return;
     try {
       const data = await api.projects.download(parseInt(id));
-      window.open(data.download_url, '_blank');
+      // Open all asset download URLs
+      data.assets.forEach((asset) => {
+        window.open(asset.download_url, '_blank');
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Download failed');
     }
@@ -189,8 +182,7 @@ export default function ProjectDetail() {
   const hasConcept = !!project.concept;
   const hasMusic = status.assets.music > 0;
   const hasImages = status.assets.images > 0;
-  const hasVideos = status.assets.video_clips > 0;
-  const hasFinalVideo = status.assets.final_video > 0;
+  const hasAssets = hasMusic || hasImages;
 
   return (
     <DashboardLayout>
@@ -217,17 +209,11 @@ export default function ProjectDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {hasFinalVideo && (
-              <>
-                <Button variant="outline" onClick={handleDownload}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                <Button>
-                  <Play className="h-4 w-4 mr-2" />
-                  Preview
-                </Button>
-              </>
+            {hasAssets && (
+              <Button variant="outline" onClick={() => handleDownload()}>
+                <Download className="h-4 w-4 mr-2" />
+                Download All
+              </Button>
             )}
           </div>
         </div>
@@ -320,33 +306,6 @@ export default function ProjectDetail() {
                 )}
                 Generate Images
               </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => handleAction('generate-videos')}
-                disabled={!hasImages || !!actionLoading || project.status === 'processing'}
-              >
-                {actionLoading === 'generate-videos' ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Video className="h-4 w-4 mr-2" />
-                )}
-                Generate Videos
-              </Button>
-
-              <Button
-                onClick={() => handleAction('compose')}
-                disabled={
-                  !hasMusic || !hasVideos || !!actionLoading || project.status === 'processing'
-                }
-              >
-                {actionLoading === 'compose' ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileVideo className="h-4 w-4 mr-2" />
-                )}
-                Compose Final Video
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -360,59 +319,6 @@ export default function ProjectDetail() {
           </TabsList>
 
           <TabsContent value="assets" className="space-y-4">
-            {/* Final Video */}
-            {hasFinalVideo && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <FileVideo className="h-5 w-5" />
-                    Final Video
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4">
-                    {getAssetsByType('final_video').map((asset) => (
-                      <div
-                        key={asset.id}
-                        className="flex items-center justify-between p-4 bg-muted rounded-lg"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="w-32 h-20 bg-black rounded overflow-hidden">
-                            {getAssetsByType('thumbnail')[0] && (
-                              <img
-                                src={getAssetsByType('thumbnail')[0].url}
-                                alt="Thumbnail"
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium">{asset.filename}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {asset.duration_seconds}s •{' '}
-                              {(asset.size_bytes / 1024 / 1024).toFixed(1)} MB
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" asChild>
-                            <a href={asset.url} target="_blank" rel="noopener noreferrer">
-                              <Eye className="h-4 w-4 mr-1" />
-                              Preview
-                            </a>
-                          </Button>
-                          <Button size="sm" onClick={handleDownload}>
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Music */}
             <Card>
               <CardHeader>
@@ -478,34 +384,6 @@ export default function ProjectDetail() {
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-sm">No images generated yet</p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Video Clips */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Video className="h-5 w-5" />
-                  Video Clips ({status.assets.video_clips})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {hasVideos ? (
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {getAssetsByType('video_clip').map((asset) => (
-                      <div key={asset.id} className="space-y-2">
-                        <video
-                          src={asset.url}
-                          controls
-                          className="w-full aspect-video rounded-lg bg-black"
-                        />
-                        <p className="text-sm text-muted-foreground truncate">{asset.filename}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No video clips generated yet</p>
                 )}
               </CardContent>
             </Card>

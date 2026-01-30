@@ -1,8 +1,10 @@
 <?php
 
+use App\Http\Controllers\AgentConfigController;
 use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\PipelineController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -57,12 +59,36 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{project}/generate-concept', [ProjectController::class, 'generateConcept']);
         Route::post('/{project}/generate-music', [ProjectController::class, 'generateMusic']);
         Route::post('/{project}/generate-images', [ProjectController::class, 'generateImages']);
-        Route::post('/{project}/generate-videos', [ProjectController::class, 'generateVideos']);
         Route::post('/{project}/generate-all', [ProjectController::class, 'generateAll']);
-        Route::post('/{project}/compose', [ProjectController::class, 'compose']);
-        Route::post('/{project}/recompose', [ProjectController::class, 'recompose']);
         Route::get('/{project}/status', [ProjectController::class, 'status']);
         Route::get('/{project}/assets', [ProjectController::class, 'assets']);
         Route::get('/{project}/download', [ProjectController::class, 'download']);
+    });
+
+    // Pipelines
+    Route::prefix('pipelines')->group(function () {
+        Route::get('/', [PipelineController::class, 'index']);
+        Route::post('/project/{project}', [PipelineController::class, 'store']);
+        Route::get('/{pipeline}', [PipelineController::class, 'show']);
+        Route::post('/{pipeline}/start', [PipelineController::class, 'start']);
+        Route::post('/{pipeline}/pause', [PipelineController::class, 'pause']);
+        Route::post('/{pipeline}/resume', [PipelineController::class, 'resume']);
+        Route::post('/{pipeline}/cancel', [PipelineController::class, 'cancel']);
+        Route::post('/{pipeline}/step', [PipelineController::class, 'runStep']);
+        Route::get('/{pipeline}/logs', [PipelineController::class, 'logs']);
+        Route::get('/{pipeline}/step/{step}', [PipelineController::class, 'stepResult']);
+    });
+
+    // Agent Configs
+    Route::prefix('agent-configs')->group(function () {
+        Route::get('/', [AgentConfigController::class, 'index']);
+        Route::post('/', [AgentConfigController::class, 'store']);
+        Route::get('/defaults/{agentType}', [AgentConfigController::class, 'getDefaultPrompt']);
+        Route::get('/{agentConfig}', [AgentConfigController::class, 'show']);
+        Route::put('/{agentConfig}', [AgentConfigController::class, 'update']);
+        Route::delete('/{agentConfig}', [AgentConfigController::class, 'destroy']);
+        Route::post('/{agentConfig}/set-default', [AgentConfigController::class, 'setDefault']);
+        Route::post('/{agentConfig}/reset', [AgentConfigController::class, 'resetToDefault']);
+        Route::post('/{agentConfig}/test', [AgentConfigController::class, 'test']);
     });
 });

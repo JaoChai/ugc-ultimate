@@ -54,13 +54,14 @@ class GenerateMusicJob implements ShouldQueue
             // Set API key
             $suno->setApiKey($apiKey);
 
-            // Generate music
+            // Generate music (default: Suno v5)
             $result = $suno->generate(
                 prompt: $this->config['prompt'],
                 lyrics: $this->config['lyrics'] ?? null,
                 title: $this->config['title'] ?? null,
                 style: $this->config['style'] ?? null,
-                instrumental: $this->config['instrumental'] ?? false
+                instrumental: $this->config['instrumental'] ?? false,
+                model: $this->config['model'] ?? SunoService::DEFAULT_MODEL
             );
 
             $taskId = $result['task_id'] ?? null;

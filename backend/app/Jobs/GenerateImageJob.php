@@ -54,8 +54,8 @@ class GenerateImageJob implements ShouldQueue
             // Set API key
             $image->setApiKey($apiKey);
 
-            // Get provider
-            $provider = $this->config['provider'] ?? ImageService::PROVIDER_FLUX;
+            // Get provider (default: nano-banana-pro)
+            $provider = $this->config['provider'] ?? ImageService::PROVIDER_NANO_BANANA_PRO;
 
             // Generate image
             $result = $image->generate(
@@ -63,15 +63,16 @@ class GenerateImageJob implements ShouldQueue
                 provider: $provider,
                 options: [
                     'aspect_ratio' => $this->config['aspect_ratio'] ?? '16:9',
-                    'model' => $this->config['model'] ?? null,
-                    'style' => $this->config['style'] ?? null,
+                    'resolution' => $this->config['resolution'] ?? '1K',
+                    'image_inputs' => $this->config['image_inputs'] ?? [],
                 ]
             );
 
-            $taskId = $result['task_id'] ?? null;
+            // Nano Banana API returns 'taskId', others might use 'task_id'
+            $taskId = $result['taskId'] ?? $result['task_id'] ?? null;
 
             if (!$taskId) {
-                throw new \RuntimeException('No task ID returned from Image API');
+                throw new \RuntimeException('No task ID returned from Nano Banana API');
             }
 
             // Create asset record to track
