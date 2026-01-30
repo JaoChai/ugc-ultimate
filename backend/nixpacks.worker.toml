@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["php83", "php83Extensions.pdo", "php83Extensions.pgsql", "php83Extensions.pdo_pgsql", "php83Extensions.zip", "php83Extensions.gd", "php83Extensions.redis", "php83Extensions.pcntl", "ffmpeg"]
+
+[phases.install]
+cmds = ["composer install --no-dev --optimize-autoloader"]
+
+[start]
+cmd = "php artisan queue:work --tries=3 --timeout=600 --memory=512"

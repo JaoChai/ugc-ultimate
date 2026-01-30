@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["php83", "php83Extensions.pdo", "php83Extensions.pgsql", "php83Extensions.zip", "php83Extensions.gd", "ffmpeg"]
+nixPkgs = ["php83", "php83Extensions.pdo", "php83Extensions.pgsql", "php83Extensions.pdo_pgsql", "php83Extensions.zip", "php83Extensions.gd", "php83Extensions.redis", "php83Extensions.pcntl"]
 
 [phases.install]
 cmds = ["composer install --no-dev --optimize-autoloader"]
@@ -12,4 +12,4 @@ cmds = [
 ]
 
 [start]
-cmd = "php artisan migrate --force && php-fpm"
+cmd = "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT:-8080}"
