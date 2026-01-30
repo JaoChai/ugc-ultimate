@@ -21,6 +21,7 @@ import {
   Sparkles,
   Eye,
 } from 'lucide-react';
+import { LazyImage } from '@/components/ui/LazyImage';
 
 interface ProjectStatus {
   project: Project;
@@ -367,10 +368,11 @@ export default function ProjectDetail() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {getAssetsByType('image').map((asset) => (
                       <div key={asset.id} className="group relative aspect-video rounded-lg overflow-hidden bg-muted">
-                        <img
+                        <LazyImage
                           src={asset.url}
                           alt={asset.filename}
                           className="w-full h-full object-cover"
+                          placeholderClassName="w-full h-full"
                         />
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <Button variant="secondary" size="sm" asChild>

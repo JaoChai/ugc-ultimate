@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { PipelineLog } from '@/lib/api';
 import { AGENT_TYPE_LABELS, type AgentType } from '@/lib/api';
@@ -26,7 +26,7 @@ const logTypeColors: Record<string, string> = {
   thinking: 'border-purple-500/20 bg-purple-500/5',
 };
 
-export function PipelineLogs({ logs, maxHeight = '400px', autoScroll = true }: PipelineLogsProps) {
+export const PipelineLogs = memo(function PipelineLogs({ logs, maxHeight = '400px', autoScroll = true }: PipelineLogsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -84,4 +84,4 @@ export function PipelineLogs({ logs, maxHeight = '400px', autoScroll = true }: P
       ))}
     </div>
   );
-}
+});

@@ -1,3 +1,5 @@
+import { apiCache, createCacheKey, CACHE_TTL } from './apiCache';
+
 // Ensure API URL always ends with /api
 const getApiBaseUrl = () => {
   const envUrl = import.meta.env.VITE_API_URL;
@@ -71,6 +73,38 @@ class ApiClient {
 
   async get<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
     return this.request<T>(endpoint, { method: 'GET', params });
+  }
+
+  /**
+   * GET request with caching
+   * @param endpoint - API endpoint
+   * @param params - Query parameters
+   * @param ttl - Cache TTL in milliseconds (optional)
+   */
+  async cachedGet<T>(endpoint: string, params?: Record<string, string>, ttl?: number): Promise<T> {
+    const cacheKey = createCacheKey(endpoint, params);
+
+    // Check cache first
+    const cached = apiCache.get<T>(cacheKey);
+    if (cached !== null) {
+      return cached;
+    }
+
+    // Fetch from API
+    const data = await this.get<T>(endpoint, params);
+
+    // Cache the response
+    apiCache.set(cacheKey, data, ttl);
+
+    return data;
+  }
+
+  /**
+   * Invalidate cache entries matching a pattern
+   * Call this after mutations (POST, PUT, DELETE)
+   */
+  invalidateCache(pattern?: string): void {
+    apiCache.invalidate(pattern);
   }
 
   async post<T>(endpoint: string, data?: unknown): Promise<T> {
@@ -337,18 +371,31 @@ export const PIPELINE_STEPS = AGENT_TYPES;
 // Projects API
 export const projectsApi = {
   list: (params?: { page?: string; status?: string }) =>
-    apiClient.get<PaginatedResponse<Project>>('/projects', params),
+    apiClient.cachedGet<PaginatedResponse<Project>>('/projects', params, CACHE_TTL.SHORT),
 
-  create: (data: { title: string; description?: string; channel_id?: number }) =>
-    apiClient.post<{ message: string; project: Project }>('/projects', data),
+  create: async (data: { title: string; description?: string; channel_id?: number }) => {
+    const result = await apiClient.post<{ message: string; project: Project }>('/projects', data);
+    apiClient.invalidateCache('/projects'); // Invalidate project list cache
+    return result;
+  },
 
-  get: (id: number) => apiClient.get<{ project: Project }>(`/projects/${id}`),
+  get: (id: number) => apiClient.cachedGet<{ project: Project }>(`/projects/${id}`, undefined, CACHE_TTL.SHORT),
 
-  update: (id: number, data: { title?: string; description?: string; channel_id?: number }) =>
-    apiClient.put<{ message: string; project: Project }>(`/projects/${id}`, data),
+  update: async (id: number, data: { title?: string; description?: string; channel_id?: number }) => {
+    const result = await apiClient.put<{ message: string; project: Project }>(`/projects/${id}`, data);
+    apiClient.invalidateCache(`/projects/${id}`);
+    apiClient.invalidateCache('/projects');
+    return result;
+  },
 
-  delete: (id: number) => apiClient.delete<{ message: string }>(`/projects/${id}`),
+  delete: async (id: number) => {
+    const result = await apiClient.delete<{ message: string }>(`/projects/${id}`);
+    apiClient.invalidateCache(`/projects/${id}`);
+    apiClient.invalidateCache('/projects');
+    return result;
+  },
 
+  // Status and assets - no cache for real-time data during processing
   status: (id: number) =>
     apiClient.get<{
       project: Project;
@@ -359,23 +406,35 @@ export const projectsApi = {
 
   assets: (id: number) => apiClient.get<{ assets: Asset[] }>(`/projects/${id}/assets`),
 
-  generateConcept: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; project: Project }>(`/projects/${id}/generate-concept`, data),
+  generateConcept: async (id: number, data: Record<string, any>) => {
+    const result = await apiClient.post<{ message: string; project: Project }>(`/projects/${id}/generate-concept`, data);
+    apiClient.invalidateCache(`/projects/${id}`);
+    return result;
+  },
 
-  generateMusic: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; project: Project }>(`/projects/${id}/generate-music`, data),
+  generateMusic: async (id: number, data: Record<string, any>) => {
+    const result = await apiClient.post<{ message: string; project: Project }>(`/projects/${id}/generate-music`, data);
+    apiClient.invalidateCache(`/projects/${id}`);
+    return result;
+  },
 
-  generateImages: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; image_count: number; project: Project }>(
+  generateImages: async (id: number, data: Record<string, any>) => {
+    const result = await apiClient.post<{ message: string; image_count: number; project: Project }>(
       `/projects/${id}/generate-images`,
       data
-    ),
+    );
+    apiClient.invalidateCache(`/projects/${id}`);
+    return result;
+  },
 
-  generateAll: (id: number, data: Record<string, any>) =>
-    apiClient.post<{ message: string; project: Project; workflow: Record<string, string> }>(
+  generateAll: async (id: number, data: Record<string, any>) => {
+    const result = await apiClient.post<{ message: string; project: Project; workflow: Record<string, string> }>(
       `/projects/${id}/generate-all`,
       data
-    ),
+    );
+    apiClient.invalidateCache(`/projects/${id}`);
+    return result;
+  },
 
   download: (id: number) =>
     apiClient.get<{ assets: { type: string; download_url: string; filename: string; size_bytes: number }[] }>(

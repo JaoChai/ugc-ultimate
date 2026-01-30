@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PIPELINE_STEPS, AGENT_TYPE_LABELS, type AgentType } from '@/lib/api';
@@ -9,7 +10,7 @@ interface PipelineStepsProps {
   mode?: 'auto' | 'manual';
 }
 
-export function PipelineSteps({ currentStep, stepsState, onStepClick, mode = 'auto' }: PipelineStepsProps) {
+export const PipelineSteps = memo(function PipelineSteps({ currentStep, stepsState, onStepClick, mode = 'auto' }: PipelineStepsProps) {
   const getStepStatus = (step: string) => {
     const state = stepsState[step];
     if (!state) return 'pending';
@@ -82,4 +83,4 @@ export function PipelineSteps({ currentStep, stepsState, onStepClick, mode = 'au
       ))}
     </div>
   );
-}
+});

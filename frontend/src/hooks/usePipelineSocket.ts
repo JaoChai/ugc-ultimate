@@ -13,6 +13,11 @@ declare global {
 
 window.Pusher = Pusher;
 
+// Limit array sizes to prevent memory leaks during long-running pipelines
+const MAX_EVENTS = 100;
+const MAX_LOGS = 500;
+const MAX_COMPLETED_STEPS = 50;
+
 interface PipelineSocketState {
   connected: boolean;
   connecting: boolean;
@@ -111,7 +116,8 @@ export function usePipelineSocket(pipelineId: number | null, options: UsePipelin
       channel.listen('.pipeline.progress', (event: PipelineEvent) => {
         setState((prev) => ({
           ...prev,
-          events: [...prev.events, event],
+          // Keep only last MAX_EVENTS to prevent memory leak
+          events: [...prev.events.slice(-(MAX_EVENTS - 1)), event],
           currentStep: event.step,
           progress: event.progress,
           status: event.status,
@@ -122,7 +128,8 @@ export function usePipelineSocket(pipelineId: number | null, options: UsePipelin
       channel.listen('.pipeline.log', (log: PipelineLog) => {
         setState((prev) => ({
           ...prev,
-          logs: [...prev.logs, log],
+          // Keep only last MAX_LOGS to prevent memory leak
+          logs: [...prev.logs.slice(-(MAX_LOGS - 1)), log],
         }));
         onLog?.(log);
       });
@@ -191,7 +198,8 @@ export function usePipelineLogs(pipelineId: number | null, logType?: string) {
   const handleLog = useCallback(
     (log: PipelineLog) => {
       if (!logType || log.log_type === logType) {
-        setLogs((prev) => [...prev, log]);
+        // Keep only last MAX_LOGS to prevent memory leak
+        setLogs((prev) => [...prev.slice(-(MAX_LOGS - 1)), log]);
       }
     },
     [logType]
@@ -225,7 +233,8 @@ export function usePipelineProgress(pipelineId: number | null) {
   }, []);
 
   const handleStepCompleted = useCallback((event: { step: string; result: Record<string, unknown>; next_step: string | null }) => {
-    setCompletedSteps((prev) => [...prev, event.step]);
+    // Keep only last MAX_COMPLETED_STEPS to prevent memory leak
+    setCompletedSteps((prev) => [...prev.slice(-(MAX_COMPLETED_STEPS - 1)), event.step]);
     setStepProgress((prev) => ({
       ...prev,
       [event.step]: 100,

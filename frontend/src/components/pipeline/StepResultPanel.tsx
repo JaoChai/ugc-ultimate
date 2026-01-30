@@ -1,8 +1,8 @@
+import { memo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AGENT_TYPE_LABELS, type AgentType, type PipelineStepState } from '@/lib/api';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface StepResultPanelProps {
@@ -16,7 +16,7 @@ const statusColors: Record<string, string> = {
   failed: 'bg-red-500',
 };
 
-export function StepResultPanel({ stepsState }: StepResultPanelProps) {
+export const StepResultPanel = memo(function StepResultPanel({ stepsState }: StepResultPanelProps) {
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
 
   const toggleStep = (step: string) => {
@@ -76,9 +76,10 @@ export function StepResultPanel({ stepsState }: StepResultPanelProps) {
       ))}
     </div>
   );
-}
+});
 
-function ResultDisplay({ result, step }: { result: Record<string, any>; step: string }) {
+// Memoize ResultDisplay for better performance
+const ResultDisplay = memo(function ResultDisplay({ result, step }: { result: Record<string, any>; step: string }) {
   // Customize display based on step type
   switch (step) {
     case 'theme_director':
@@ -214,4 +215,4 @@ function ResultDisplay({ result, step }: { result: Record<string, any>; step: st
         </pre>
       );
   }
-}
+});
