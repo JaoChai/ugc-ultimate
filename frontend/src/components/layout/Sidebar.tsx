@@ -104,15 +104,6 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         ))}
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="p-4 border-t border-slate-200">
-          <div className="bg-slate-50 rounded-lg p-3">
-            <p className="text-xs text-slate-500">Credits Remaining</p>
-            <p className="text-lg font-semibold text-slate-900">-</p>
-          </div>
-        </div>
-      )}
     </>
   );
 
