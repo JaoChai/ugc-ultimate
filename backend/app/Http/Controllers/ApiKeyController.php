@@ -145,14 +145,14 @@ class ApiKeyController extends Controller
                 $credits = $data['data'] ?? 0;
 
                 $apiKey->update([
-                    'credits_remaining' => $credits,
+                    'credits_remaining' => (int) $credits,
                     'last_used_at' => now(),
                 ]);
 
                 return [
                     'success' => true,
                     'message' => 'API key is valid',
-                    'credits' => $credits,
+                    'credits' => (int) $credits,
                 ];
             }
 
@@ -182,7 +182,7 @@ class ApiKeyController extends Controller
                 $credits = $data['data']['limit_remaining'] ?? $data['data']['usage'] ?? null;
                 if ($credits !== null) {
                     $apiKey->update([
-                        'credits_remaining' => $credits,
+                        'credits_remaining' => (int) $credits,
                         'last_used_at' => now(),
                     ]);
                 } else {
