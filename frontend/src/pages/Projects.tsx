@@ -1,9 +1,20 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { api } from '@/lib/api';
+import type { Project } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Plus,
   Search,
-  Filter,
   MoreVertical,
   Clock,
   CheckCircle2,
@@ -13,18 +24,8 @@ import {
   Trash2,
   Eye,
   Edit3,
+  Loader2,
 } from 'lucide-react';
-import { useState } from 'react';
-
-interface Project {
-  id: number;
-  title: string;
-  description: string;
-  status: 'draft' | 'processing' | 'completed' | 'failed';
-  channel: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 const statusConfig = {
   draft: { icon: Clock, label: 'Draft', color: 'text-muted-foreground', bg: 'bg-secondary' },
@@ -33,18 +34,89 @@ const statusConfig = {
   failed: { icon: AlertCircle, label: 'Failed', color: 'text-destructive', bg: 'bg-destructive/10' },
 };
 
-const mockProjects: Project[] = [];
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  return date.toLocaleDateString();
+}
 
 export default function Projects() {
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showDropdown, setShowDropdown] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const filteredProjects = mockProjects.filter((project) => {
+  const fetchProjects = useCallback(async () => {
+    try {
+      const params: Record<string, string> = { page: '1' };
+      if (statusFilter !== 'all') {
+        params.status = statusFilter;
+      }
+      const response = await api.projects.list(params);
+      setProjects(response.data);
+    } catch (err) {
+      console.error('Failed to fetch projects:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(null);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleDelete = async (projectId: number) => {
+    if (!confirm('Are you sure you want to delete this project?')) return;
+
+    setDeleting(projectId);
+    try {
+      await api.projects.delete(projectId);
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      alert('Failed to delete project');
+    } finally {
+      setDeleting(null);
+      setShowDropdown(null);
+    }
+  };
+
+  const filteredProjects = projects.filter((project) => {
     const matchesSearch = project.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    return matchesSearch;
   });
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -54,13 +126,12 @@ export default function Projects() {
           <h1 className="text-2xl font-bold text-foreground">Projects</h1>
           <p className="text-muted-foreground mt-1">Manage your video generation projects</p>
         </div>
-        <Link
-          to="/projects/new"
-          className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg font-medium hover:bg-primary/90 transition-colors"
-        >
-          <Plus size={18} />
-          New Project
-        </Link>
+        <Button asChild>
+          <Link to="/projects/new">
+            <Plus className="h-4 w-4 mr-2" />
+            New Project
+          </Link>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -70,48 +141,48 @@ export default function Projects() {
             className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
             size={18}
           />
-          <input
+          <Input
             type="text"
             placeholder="Search projects..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+            className="pl-10"
           />
         </div>
-        <div className="relative">
-          <Filter
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            size={18}
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="pl-10 pr-8 py-2 bg-card border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent appearance-none cursor-pointer"
-          >
-            <option value="all">All Status</option>
-            <option value="draft">Draft</option>
-            <option value="processing">Processing</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-          </select>
-        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Projects list */}
       {filteredProjects.length === 0 ? (
         <div className="bg-card rounded-xl border border-border p-12 text-center">
           <FolderKanban className="mx-auto text-muted-foreground/50" size={64} />
-          <h3 className="text-lg font-semibold text-foreground mt-4">No projects yet</h3>
+          <h3 className="text-lg font-semibold text-foreground mt-4">
+            {projects.length === 0 ? 'No projects yet' : 'No matching projects'}
+          </h3>
           <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
-            Create your first project to start generating AI-powered music videos
+            {projects.length === 0
+              ? 'Create your first project to start generating AI-powered music videos'
+              : 'Try adjusting your search or filter criteria'}
           </p>
-          <Link
-            to="/projects/new"
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-medium hover:bg-primary/90 transition-colors mt-6"
-          >
-            <Plus size={18} />
-            Create First Project
-          </Link>
+          {projects.length === 0 && (
+            <Button asChild className="mt-6">
+              <Link to="/projects/new">
+                <Plus className="h-4 w-4 mr-2" />
+                Create First Project
+              </Link>
+            </Button>
+          )}
         </div>
       ) : (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -141,7 +212,8 @@ export default function Projects() {
                 return (
                   <tr
                     key={project.id}
-                    className="border-b border-border last:border-0 hover:bg-secondary/20 transition-colors"
+                    className="border-b border-border last:border-0 hover:bg-secondary/20 transition-colors cursor-pointer"
+                    onClick={() => navigate(`/projects/${project.id}`)}
                   >
                     <td className="py-4 px-4">
                       <div>
@@ -153,7 +225,7 @@ export default function Projects() {
                     </td>
                     <td className="py-4 px-4 hidden md:table-cell">
                       <span className="text-sm text-muted-foreground">
-                        {project.channel || '-'}
+                        {project.channel?.name || '-'}
                       </span>
                     </td>
                     <td className="py-4 px-4">
@@ -165,18 +237,22 @@ export default function Projects() {
                       </span>
                     </td>
                     <td className="py-4 px-4 hidden sm:table-cell">
-                      <span className="text-sm text-muted-foreground">{project.updatedAt}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {formatRelativeTime(project.updated_at)}
+                      </span>
                     </td>
-                    <td className="py-4 px-4 text-right">
-                      <div className="relative inline-block">
-                        <button
-                          onClick={() =>
-                            setShowDropdown(showDropdown === project.id ? null : project.id)
-                          }
-                          className="p-2 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+                    <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="relative inline-block" ref={showDropdown === project.id ? dropdownRef : null}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowDropdown(showDropdown === project.id ? null : project.id);
+                          }}
                         >
                           <MoreVertical size={16} />
-                        </button>
+                        </Button>
                         {showDropdown === project.id && (
                           <div className="absolute right-0 top-full mt-1 w-40 bg-card rounded-lg border border-border shadow-lg py-1 z-10">
                             <Link
@@ -193,8 +269,16 @@ export default function Projects() {
                               <Edit3 size={14} />
                               Edit
                             </Link>
-                            <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-secondary transition-colors">
-                              <Trash2 size={14} />
+                            <button
+                              onClick={() => handleDelete(project.id)}
+                              disabled={deleting === project.id}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-secondary transition-colors disabled:opacity-50"
+                            >
+                              {deleting === project.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
                               Delete
                             </button>
                           </div>
