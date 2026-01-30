@@ -9,7 +9,6 @@ import {
   ChevronRight,
   X,
   Menu,
-  Sparkles,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -29,7 +28,6 @@ interface SidebarProps {
 
 export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(() => {
-    // Restore collapsed state from localStorage
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('sidebar_collapsed');
       return saved === 'true';
@@ -37,12 +35,10 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
     return false;
   });
 
-  // Persist collapsed state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebar_collapsed', String(collapsed));
   }, [collapsed]);
 
-  // Close mobile sidebar when route changes
   useEffect(() => {
     if (mobileOpen && onMobileClose) {
       const handleRouteChange = () => onMobileClose();
@@ -54,24 +50,24 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
   const sidebarContent = (
     <>
       {/* Logo */}
-      <div className="h-16 flex items-center justify-between px-4 border-b border-border">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-200">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <Sparkles className="h-4 w-4 text-primary-foreground" />
+            <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+              <span className="text-white font-bold text-sm">U</span>
             </div>
-            <span className="font-semibold text-foreground">UGC Ultimate</span>
+            <span className="font-semibold text-slate-900">UGC Ultimate</span>
           </div>
         )}
         {collapsed && (
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center mx-auto">
-            <Sparkles className="h-4 w-4 text-primary-foreground" />
+          <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center mx-auto">
+            <span className="text-white font-bold text-sm">U</span>
           </div>
         )}
         {/* Desktop collapse toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors hidden lg:block"
+          className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors hidden lg:block cursor-pointer"
         >
           {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -79,7 +75,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
         {mobileOpen && onMobileClose && (
           <button
             onClick={onMobileClose}
-            className="p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors lg:hidden"
+            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-900 transition-colors lg:hidden cursor-pointer"
           >
             <X size={18} />
           </button>
@@ -94,25 +90,25 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
             to={item.href}
             onClick={onMobileClose}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+              `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
                 isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  ? 'bg-slate-100 text-slate-900 font-medium'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
               }`
             }
           >
             <item.icon size={20} />
-            {!collapsed && <span className="font-medium">{item.name}</span>}
+            {!collapsed && <span>{item.name}</span>}
           </NavLink>
         ))}
       </nav>
 
       {/* Footer */}
       {!collapsed && (
-        <div className="p-4 border-t border-border">
-          <div className="bg-secondary/50 rounded-lg p-3">
-            <p className="text-xs text-muted-foreground">Credits Remaining</p>
-            <p className="text-lg font-semibold text-foreground">-</p>
+        <div className="p-4 border-t border-slate-200">
+          <div className="bg-slate-50 rounded-lg p-3">
+            <p className="text-xs text-slate-500">Credits Remaining</p>
+            <p className="text-lg font-semibold text-slate-900">-</p>
           </div>
         </div>
       )}
@@ -125,7 +121,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       <aside
         className={`${
           collapsed ? 'w-16' : 'w-64'
-        } bg-card border-r border-border flex-col transition-all duration-300 hidden lg:flex`}
+        } bg-white border-r border-slate-200 flex-col transition-all duration-300 hidden lg:flex`}
       >
         {sidebarContent}
       </aside>
@@ -133,14 +129,14 @@ export default function Sidebar({ mobileOpen = false, onMobileClose }: SidebarPr
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
+          className="fixed inset-0 bg-black/20 z-40 lg:hidden"
           onClick={onMobileClose}
         />
       )}
 
       {/* Mobile sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 w-64 bg-card border-r border-border flex flex-col z-50 transform transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 w-64 bg-white border-r border-slate-200 flex flex-col z-50 transform transition-transform duration-300 lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

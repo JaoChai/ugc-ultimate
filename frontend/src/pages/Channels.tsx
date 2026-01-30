@@ -29,20 +29,12 @@ import {
   Tv2,
   MoreVertical,
   Calendar,
-  Youtube,
-  Instagram,
   Settings,
   Trash2,
   Loader2,
   Video,
   Clock,
 } from 'lucide-react';
-
-const platformConfig: Record<string, { icon: React.ElementType; label: string; color: string; bg: string }> = {
-  youtube: { icon: Youtube, label: 'YouTube', color: 'text-red-500', bg: 'bg-red-500/10' },
-  tiktok: { icon: Tv2, label: 'TikTok', color: 'text-foreground', bg: 'bg-secondary' },
-  instagram: { icon: Instagram, label: 'Instagram', color: 'text-pink-500', bg: 'bg-pink-500/10' },
-};
 
 interface ChannelWithCount extends Channel {
   projects_count?: number;
@@ -183,7 +175,7 @@ export default function Channels() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       </DashboardLayout>
     );
@@ -194,8 +186,8 @@ export default function Channels() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Channels</h1>
-          <p className="text-muted-foreground mt-1">Manage your publishing channels</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Channels</h1>
+          <p className="text-slate-500 mt-1">Manage your publishing channels</p>
         </div>
         <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
@@ -206,9 +198,9 @@ export default function Channels() {
       {/* Channels grid */}
       {channels.length === 0 ? (
         <Card className="p-12 text-center">
-          <Tv2 className="mx-auto text-muted-foreground/50 h-16 w-16" />
-          <h3 className="text-lg font-semibold mt-4">No channels yet</h3>
-          <p className="text-muted-foreground mt-2 max-w-sm mx-auto">
+          <Tv2 className="mx-auto text-slate-300 h-16 w-16" />
+          <h3 className="text-lg font-medium text-slate-900 mt-4">No channels yet</h3>
+          <p className="text-slate-500 mt-2 max-w-sm mx-auto">
             Add your first channel to start scheduling automatic video generation
           </p>
           <Button onClick={handleCreate} className="mt-6">
@@ -218,86 +210,82 @@ export default function Channels() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {channels.map((channel) => {
-            const config = platformConfig[channel.platform || 'youtube'] || platformConfig.youtube;
-            const IconComponent = config.icon;
-            return (
-              <Card key={channel.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className={`p-3 rounded-lg ${config.bg}`}>
-                      <IconComponent className={`h-6 w-6 ${config.color}`} />
-                    </div>
-                    <div className="relative">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setShowDropdown(showDropdown === channel.id ? null : channel.id)}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                      {showDropdown === channel.id && (
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-card rounded-lg border shadow-lg py-1 z-10">
-                          <button
-                            onClick={() => handleEdit(channel)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary"
-                          >
-                            <Settings className="h-4 w-4" />
-                            Edit Settings
-                          </button>
-                          <button
-                            onClick={() => handleSchedule(channel)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary"
-                          >
-                            <Clock className="h-4 w-4" />
-                            Configure Schedule
-                          </button>
-                          <button
-                            onClick={() => handleToggleActive(channel)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary"
-                          >
-                            <Video className="h-4 w-4" />
-                            {channel.is_active ? 'Pause' : 'Activate'}
-                          </button>
-                          <hr className="my-1" />
-                          <button
-                            onClick={() => handleDelete(channel)}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-secondary"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+          {channels.map((channel) => (
+            <Card key={channel.id} className="hover:border-slate-300 transition-colors">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="p-3 rounded-lg bg-slate-50">
+                    <Tv2 className="h-6 w-6 text-slate-500" />
                   </div>
-                  <CardTitle className="text-lg mt-3">{channel.name}</CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {channel.description || 'No description'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-4 pt-2 border-t">
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      {channel.schedule_config?.enabled
-                        ? channel.schedule_config?.cron || 'Scheduled'
-                        : 'No schedule'}
-                    </div>
-                    <Badge
-                      variant={channel.is_active ? 'default' : 'secondary'}
-                      className="ml-auto"
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowDropdown(showDropdown === channel.id ? null : channel.id)}
                     >
-                      {channel.is_active ? 'Active' : 'Paused'}
-                    </Badge>
+                      <MoreVertical className="h-4 w-4 text-slate-500" />
+                    </Button>
+                    {showDropdown === channel.id && (
+                      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg border border-slate-200 shadow-lg py-1 z-10">
+                        <button
+                          onClick={() => handleEdit(channel)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <Settings className="h-4 w-4" />
+                          Edit Settings
+                        </button>
+                        <button
+                          onClick={() => handleSchedule(channel)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <Clock className="h-4 w-4" />
+                          Configure Schedule
+                        </button>
+                        <button
+                          onClick={() => handleToggleActive(channel)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <Video className="h-4 w-4" />
+                          {channel.is_active ? 'Pause' : 'Activate'}
+                        </button>
+                        <hr className="my-1 border-slate-200" />
+                        <button
+                          onClick={() => handleDelete(channel)}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-slate-50 cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-3 text-sm text-muted-foreground">
-                    {channel.projects_count || 0} project{(channel.projects_count || 0) !== 1 ? 's' : ''}
+                </div>
+                <CardTitle className="text-lg mt-3 text-slate-900">{channel.name}</CardTitle>
+                <CardDescription className="line-clamp-2 text-slate-500">
+                  {channel.description || 'No description'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4 pt-2 border-t border-slate-200">
+                  <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                    <Calendar className="h-4 w-4" />
+                    {channel.schedule_config?.enabled
+                      ? channel.schedule_config?.cron || 'Scheduled'
+                      : 'No schedule'}
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <Badge
+                    status={channel.is_active ? 'active' : 'paused'}
+                    className="ml-auto"
+                  >
+                    {channel.is_active ? 'Active' : 'Paused'}
+                  </Badge>
+                </div>
+                <div className="mt-3 text-sm text-slate-500">
+                  {channel.projects_count || 0} project{(channel.projects_count || 0) !== 1 ? 's' : ''}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -312,7 +300,7 @@ export default function Channels() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {error && (
-              <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-lg">
+              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200">
                 {error}
               </div>
             )}
@@ -325,6 +313,7 @@ export default function Channels() {
                   setFormData({ ...formData, name: e.target.value })
                 }
                 placeholder="My YouTube Channel"
+                className="bg-white border-slate-200"
               />
             </div>
             <div className="space-y-2">
@@ -333,7 +322,7 @@ export default function Channels() {
                 value={formData.platform}
                 onValueChange={(v: string) => setFormData({ ...formData, platform: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="bg-white border-slate-200">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -353,6 +342,7 @@ export default function Channels() {
                 }
                 placeholder="What kind of content will this channel have?"
                 rows={3}
+                className="bg-white border-slate-200"
               />
             </div>
           </div>
@@ -379,14 +369,14 @@ export default function Channels() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             {error && (
-              <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-lg">
+              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-200">
                 {error}
               </div>
             )}
             <div className="flex items-center justify-between">
               <div>
                 <Label>Enable Scheduling</Label>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-slate-500">
                   Auto-generate content on schedule
                 </p>
               </div>
@@ -408,7 +398,7 @@ export default function Channels() {
                       setScheduleData({ ...scheduleData, cron: v })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -429,6 +419,7 @@ export default function Channels() {
                       setScheduleData({ ...scheduleData, theme: e.target.value })
                     }
                     placeholder="e.g., Relaxing lofi music for studying"
+                    className="bg-white border-slate-200"
                   />
                 </div>
 
@@ -441,7 +432,7 @@ export default function Channels() {
                         setScheduleData({ ...scheduleData, duration: parseInt(v) })
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-white border-slate-200">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -460,7 +451,7 @@ export default function Channels() {
                         setScheduleData({ ...scheduleData, language: v })
                       }
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-white border-slate-200">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -481,7 +472,7 @@ export default function Channels() {
                       setScheduleData({ ...scheduleData, visual_style: v })
                     }
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white border-slate-200">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

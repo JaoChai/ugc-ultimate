@@ -4,25 +4,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import { api } from '@/lib/api';
 import type { Project, Channel } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 import {
   FolderKanban,
   Tv2,
   Zap,
   Plus,
   ArrowRight,
-  Clock,
-  CheckCircle2,
-  AlertCircle,
-  Play,
   Loader2,
 } from 'lucide-react';
-
-const statusConfig = {
-  draft: { icon: Clock, color: 'text-muted-foreground', bg: 'bg-secondary' },
-  processing: { icon: Play, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-500/10' },
-  failed: { icon: AlertCircle, color: 'text-destructive', bg: 'bg-destructive/10' },
-};
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -59,10 +49,9 @@ export default function Dashboard() {
       const allProjects = projectsRes.data;
       const allChannels = channelsRes.channels;
 
-      setProjects(allProjects.slice(0, 5)); // Recent 5 projects
+      setProjects(allProjects.slice(0, 5));
       setChannels(allChannels);
 
-      // Calculate stats
       const now = new Date();
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -100,24 +89,18 @@ export default function Dashboard() {
       change: stats.processingProjects > 0
         ? `${stats.processingProjects} processing`
         : `+${stats.completedThisWeek} this week`,
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-500/10',
     },
     {
       name: 'Active Channels',
       value: stats.activeChannels.toString(),
       icon: Tv2,
       change: `${stats.scheduledChannels} scheduled`,
-      color: 'text-green-500',
-      bgColor: 'bg-green-500/10',
     },
     {
       name: 'API Credits',
       value: '-',
       icon: Zap,
       change: 'Check in API Keys',
-      color: 'text-amber-500',
-      bgColor: 'bg-amber-500/10',
     },
   ];
 
@@ -125,7 +108,7 @@ export default function Dashboard() {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
         </div>
       </DashboardLayout>
     );
@@ -135,49 +118,49 @@ export default function Dashboard() {
     <DashboardLayout>
       {/* Welcome section */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground">
-          Welcome back, {user?.name?.split(' ')[0]}!
+        <h1 className="text-2xl font-semibold text-slate-900">
+          Welcome back, {user?.name?.split(' ')[0]}
         </h1>
-        <p className="text-muted-foreground mt-1">
+        <p className="text-slate-500 mt-1">
           Here's what's happening with your video projects
         </p>
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         {statsCards.map((stat) => (
           <div
             key={stat.name}
-            className="bg-card rounded-xl border border-border p-6 hover:shadow-md transition-shadow"
+            className="bg-white rounded-lg border border-slate-200 p-5 hover:border-slate-300 transition-colors"
           >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">{stat.name}</p>
-                <p className="text-3xl font-bold text-foreground mt-1">{stat.value}</p>
-                <p className="text-xs text-muted-foreground mt-2">{stat.change}</p>
+                <p className="text-sm text-slate-500">{stat.name}</p>
+                <p className="text-2xl font-semibold text-slate-900 mt-1">{stat.value}</p>
+                <p className="text-xs text-slate-400 mt-2">{stat.change}</p>
               </div>
-              <div className={`p-3 rounded-lg ${stat.bgColor}`}>
-                <stat.icon className={stat.color} size={24} />
+              <div className="p-2 rounded-lg bg-slate-50">
+                <stat.icon className="text-slate-500" size={20} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Quick actions */}
-      <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-xl border border-primary/20 p-6 mb-8">
+      {/* Quick action */}
+      <div className="bg-white rounded-lg border border-slate-200 p-5 mb-8">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-foreground">
+            <h2 className="text-base font-medium text-slate-900">
               {projects.length === 0 ? 'Create Your First Video' : 'Start a New Project'}
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               Use AI to generate music videos automatically
             </p>
           </div>
           <Link
             to="/projects/new"
-            className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg font-medium hover:bg-primary/90 transition-colors"
+            className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-lg font-medium hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <Plus size={18} />
             New Project
@@ -188,95 +171,90 @@ export default function Dashboard() {
       {/* Recent projects & Quick links */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent projects */}
-        <div className="lg:col-span-2 bg-card rounded-xl border border-border">
-          <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-            <h2 className="font-semibold text-foreground">Recent Projects</h2>
+        <div className="lg:col-span-2 bg-white rounded-lg border border-slate-200">
+          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="font-medium text-slate-900">Recent Projects</h2>
             <Link
               to="/projects"
-              className="text-sm text-primary hover:underline flex items-center gap-1"
+              className="text-sm text-slate-500 hover:text-slate-900 flex items-center gap-1 cursor-pointer"
             >
               View all <ArrowRight size={14} />
             </Link>
           </div>
-          <div className="p-6">
+          <div className="p-5">
             {projects.length === 0 ? (
               <div className="text-center py-8">
-                <FolderKanban className="mx-auto text-muted-foreground/50" size={48} />
-                <p className="text-muted-foreground mt-4">No projects yet</p>
+                <FolderKanban className="mx-auto text-slate-300" size={48} />
+                <p className="text-slate-500 mt-4">No projects yet</p>
                 <Link
                   to="/projects/new"
-                  className="inline-flex items-center gap-2 text-primary hover:underline mt-2 text-sm"
+                  className="inline-flex items-center gap-2 text-slate-900 hover:underline mt-2 text-sm cursor-pointer"
                 >
                   <Plus size={14} />
                   Create your first project
                 </Link>
               </div>
             ) : (
-              <div className="space-y-3">
-                {projects.map((project) => {
-                  const config = statusConfig[project.status];
-                  return (
-                    <Link
-                      key={project.id}
-                      to={`/projects/${project.id}`}
-                      className="flex items-center justify-between p-3 rounded-lg hover:bg-secondary transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${config.bg}`}>
-                          <config.icon className={config.color} size={16} />
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{project.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatRelativeTime(project.updated_at)}
-                          </p>
-                        </div>
+              <div className="space-y-2">
+                {projects.map((project) => (
+                  <Link
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-slate-50">
+                        <FolderKanban className="text-slate-500" size={16} />
                       </div>
-                      <span
-                        className={`text-xs font-medium px-2 py-1 rounded-full ${config.bg} ${config.color}`}
-                      >
-                        {project.status}
-                      </span>
-                    </Link>
-                  );
-                })}
+                      <div>
+                        <p className="font-medium text-slate-900">{project.title}</p>
+                        <p className="text-xs text-slate-400">
+                          {formatRelativeTime(project.updated_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge status={project.status as 'draft' | 'processing' | 'completed' | 'failed'}>
+                      {project.status}
+                    </Badge>
+                  </Link>
+                ))}
               </div>
             )}
           </div>
         </div>
 
         {/* Quick links */}
-        <div className="bg-card rounded-xl border border-border">
-          <div className="px-6 py-4 border-b border-border">
-            <h2 className="font-semibold text-foreground">Quick Links</h2>
+        <div className="bg-white rounded-lg border border-slate-200">
+          <div className="px-5 py-4 border-b border-slate-200">
+            <h2 className="font-medium text-slate-900">Quick Links</h2>
           </div>
-          <div className="p-4 space-y-2">
+          <div className="p-4 space-y-1">
             <Link
               to="/channels"
-              className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary transition-colors group"
+              className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
             >
-              <div className="p-2 rounded-lg bg-green-500/10 group-hover:bg-green-500/20 transition-colors">
-                <Tv2 className="text-green-500" size={18} />
+              <div className="p-2 rounded-lg bg-slate-50">
+                <Tv2 className="text-slate-500" size={18} />
               </div>
               <div>
-                <p className="font-medium text-foreground">
+                <p className="font-medium text-slate-900">
                   {channels.length === 0 ? 'Add Channel' : 'Manage Channels'}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-400">
                   {channels.length === 0 ? 'Set up auto-publish' : `${channels.length} channel${channels.length !== 1 ? 's' : ''}`}
                 </p>
               </div>
             </Link>
             <Link
               to="/settings/api-keys"
-              className="flex items-center gap-3 p-3 rounded-lg hover:bg-secondary transition-colors group"
+              className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer"
             >
-              <div className="p-2 rounded-lg bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
-                <Zap className="text-amber-500" size={18} />
+              <div className="p-2 rounded-lg bg-slate-50">
+                <Zap className="text-slate-500" size={18} />
               </div>
               <div>
-                <p className="font-medium text-foreground">Manage API Keys</p>
-                <p className="text-xs text-muted-foreground">Connect kie.ai & R2</p>
+                <p className="font-medium text-slate-900">Manage API Keys</p>
+                <p className="text-xs text-slate-400">Connect kie.ai & R2</p>
               </div>
             </Link>
           </div>
