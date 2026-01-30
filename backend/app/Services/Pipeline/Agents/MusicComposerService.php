@@ -61,7 +61,7 @@ class MusicComposerService extends BaseAgentService
         $this->logProgress(60, "Suno task created, waiting for completion...");
 
         // Step 3: Wait for Suno completion
-        $taskId = $sunoResult['task_id'] ?? null;
+        $taskId = $sunoResult['taskId'] ?? $sunoResult['task_id'] ?? null;
         if ($taskId) {
             $this->logThinking("Waiting for Suno to generate music...");
             $completedResult = $this->waitForSuno($taskId);
@@ -107,12 +107,17 @@ PROMPT;
         $title = $musicConcept['title'] ?? 'Generated Song';
         $genre = $musicConcept['genre'] ?? 'pop';
 
+        // If lyrics provided, use custom mode (prompt becomes lyrics)
+        // Otherwise, use auto mode (prompt is description)
+        $hasLyrics = !empty($lyrics);
+
         return $this->sunoService->generate(
-            prompt: $sunoPrompt,
-            lyrics: $lyrics,
-            title: $title,
+            prompt: $hasLyrics ? $lyrics : $sunoPrompt,
+            model: SunoService::MODEL_V5,
+            customMode: $hasLyrics,
+            instrumental: false,
             style: $genre,
-            model: SunoService::MODEL_V5
+            title: $title
         );
     }
 
@@ -148,10 +153,18 @@ PROMPT;
 
     protected function processResult(array $musicConcept, array $sunoResult): array
     {
-        // Extract audio URL from Suno result
-        $audioUrl = $sunoResult['data']['audio_url']
+        // Extract audio URL from Suno result (handles various response formats)
+        // Callback format: data.sunoData[0].audioUrl
+        // Direct format: audio_url or data.audio_url
+        $sunoData = $sunoResult['response']['sunoData'][0]
+            ?? $sunoResult['data']['sunoData'][0]
+            ?? $sunoResult['sunoData'][0]
+            ?? null;
+
+        $audioUrl = $sunoData['audioUrl']
+            ?? $sunoData['audio_url']
             ?? $sunoResult['audio_url']
-            ?? $sunoResult['result']['audio_url']
+            ?? $sunoResult['data']['audio_url']
             ?? null;
 
         return [
@@ -162,7 +175,7 @@ PROMPT;
             'lyrics_segments' => $musicConcept['lyrics_segments'] ?? [],
             'suno_prompt' => $musicConcept['suno_prompt'] ?? '',
             'audio_url' => $audioUrl,
-            'task_id' => $sunoResult['task_id'] ?? null,
+            'task_id' => $sunoResult['taskId'] ?? $sunoResult['task_id'] ?? null,
             'raw_result' => $sunoResult,
         ];
     }

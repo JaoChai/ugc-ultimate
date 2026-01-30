@@ -4,19 +4,37 @@ namespace App\Services;
 
 use App\Models\ApiKey;
 
+/**
+ * Suno Music Generation Service
+ *
+ * Provides integration with kie.ai's Suno music generation APIs:
+ * - Music generation with customizable styles
+ * - Lyrics generation
+ * - Music extension
+ * - Stem separation (vocals/instrumentals)
+ * - MIDI conversion
+ * - Cover image generation
+ *
+ * @see https://docs.kie.ai/suno-api/quickstart
+ * @see https://docs.kie.ai/suno-api/generate-music
+ */
 class SunoService
 {
     protected KieApiService $kieApi;
 
-    // Available Suno models
-    public const MODEL_V3_5 = 'chirp-v3-5';      // Legacy
-    public const MODEL_V4 = 'chirp-v4';          // Vocal quality
-    public const MODEL_V4_5 = 'chirp-v4-5';      // Smart prompts
-    public const MODEL_V4_5_PLUS = 'chirp-v4-5-plus';  // Richer sound
-    public const MODEL_V5 = 'chirp-v5';          // Latest - best quality
+    // Model names (exact values from docs)
+    public const MODEL_V4 = 'V4';           // Improved vocals, max 4 min
+    public const MODEL_V4_5 = 'V4_5';       // Smart prompts, max 8 min
+    public const MODEL_V4_5_PLUS = 'V4_5PLUS';  // Richer sound, max 8 min
+    public const MODEL_V4_5_ALL = 'V4_5ALL';    // Enhanced prompting, max 8 min
+    public const MODEL_V5 = 'V5';           // Superior expression, faster
 
-    // Default model (v5)
+    // Default model
     public const DEFAULT_MODEL = self::MODEL_V5;
+
+    // Stem separation types
+    public const STEM_VOCAL = 'separate_vocal';  // 2 stems: vocals + instrumental
+    public const STEM_SPLIT = 'split_stem';      // Up to 12 stems
 
     public function __construct(KieApiService $kieApi)
     {
@@ -30,149 +48,257 @@ class SunoService
     }
 
     /**
-     * Generate music with custom lyrics
+     * Generate music
      *
-     * @param string $prompt Description of the song/style (max 1000 chars for v5)
-     * @param string|null $lyrics Custom lyrics (optional)
-     * @param string|null $title Song title (optional)
-     * @param string|null $style Music style/genre (optional)
-     * @param bool $instrumental Generate instrumental only
-     * @param string $model Suno model version (default: v5)
+     * @param string $prompt Content description (lyrics if customMode=true and instrumental=false)
+     * @param string $model V4, V4_5, V4_5PLUS, V4_5ALL, or V5
+     * @param bool $customMode Enable advanced customization
+     * @param bool $instrumental Generate without vocals
+     * @param string|null $style Music style/genre (required if customMode=true)
+     * @param string|null $title Track name (max 80-100 chars depending on model)
+     * @param string $callbackUrl Webhook URL for completion (required)
+     * @param array $options Additional options: negativeTags, vocalGender, styleWeight, etc.
      */
     public function generate(
         string $prompt,
-        ?string $lyrics = null,
-        ?string $title = null,
-        ?string $style = null,
+        string $model = self::DEFAULT_MODEL,
+        bool $customMode = false,
         bool $instrumental = false,
-        string $model = self::DEFAULT_MODEL
+        ?string $style = null,
+        ?string $title = null,
+        string $callbackUrl = '',
+        array $options = []
     ): array {
         $payload = [
             'prompt' => $prompt,
             'model' => $model,
-            'make_instrumental' => $instrumental,
+            'customMode' => $customMode,
+            'instrumental' => $instrumental,
         ];
 
-        if ($lyrics) {
-            $payload['lyrics'] = $lyrics;
-        }
-
-        if ($title) {
-            $payload['title'] = $title;
+        if ($callbackUrl) {
+            $payload['callBackUrl'] = $callbackUrl;
         }
 
         if ($style) {
             $payload['style'] = $style;
         }
 
-        return $this->kieApi->post('/api/v1/suno/generate', $payload);
+        if ($title) {
+            $payload['title'] = $title;
+        }
+
+        // Add optional parameters
+        $optionalParams = ['negativeTags', 'vocalGender', 'styleWeight', 'weirdnessConstraint', 'audioWeight', 'personaId'];
+        foreach ($optionalParams as $param) {
+            if (isset($options[$param])) {
+                $payload[$param] = $options[$param];
+            }
+        }
+
+        return $this->kieApi->post('/api/v1/generate', $payload);
     }
 
     /**
-     * Generate music with auto-generated lyrics based on prompt
+     * Generate music with auto-generated lyrics
      */
     public function generateAuto(
         string $prompt,
-        string $model = self::DEFAULT_MODEL
+        string $model = self::DEFAULT_MODEL,
+        string $callbackUrl = ''
     ): array {
-        return $this->kieApi->post('/api/v1/suno/generate', [
-            'prompt' => $prompt,
-            'model' => $model,
-            'auto_lyrics' => true,
-        ]);
+        return $this->generate(
+            prompt: $prompt,
+            model: $model,
+            customMode: false,
+            instrumental: false,
+            callbackUrl: $callbackUrl
+        );
     }
 
     /**
-     * Generate lyrics from a prompt (v5 feature)
-     *
-     * @param string $prompt Description of what the lyrics should be about
+     * Generate instrumental music (no vocals)
      */
-    public function generateLyrics(string $prompt): array
-    {
-        return $this->kieApi->post('/api/v1/suno/lyrics', [
-            'prompt' => $prompt,
-        ]);
+    public function generateInstrumental(
+        string $prompt,
+        string $model = self::DEFAULT_MODEL,
+        ?string $style = null,
+        string $callbackUrl = ''
+    ): array {
+        return $this->generate(
+            prompt: $prompt,
+            model: $model,
+            customMode: $style !== null,
+            instrumental: true,
+            style: $style,
+            callbackUrl: $callbackUrl
+        );
     }
 
     /**
-     * Extend an existing song (v5 enhanced - no artifacts)
+     * Generate lyrics from a prompt
      *
-     * @param string $audioUrl URL of the audio to extend
+     * @param string $prompt Description of desired lyrics (max 200 words)
+     * @param string $callbackUrl Webhook URL for completion (required)
+     */
+    public function generateLyrics(string $prompt, string $callbackUrl = ''): array
+    {
+        $payload = [
+            'prompt' => $prompt,
+        ];
+
+        if ($callbackUrl) {
+            $payload['callBackUrl'] = $callbackUrl;
+        }
+
+        return $this->kieApi->post('/api/v1/lyrics', $payload);
+    }
+
+    /**
+     * Extend an existing song
+     *
+     * @param string $audioId Audio ID from previous generation
      * @param string $prompt Extension prompt
-     * @param int $continueAt Timestamp to continue from (seconds)
+     * @param string $model AI model version
+     * @param bool $defaultParamFlag true=use custom params, false=use original audio params
+     * @param int|null $continueAt Start time in seconds (required if defaultParamFlag=true)
+     * @param string|null $style Music style (required if defaultParamFlag=true)
+     * @param string|null $title Track title (required if defaultParamFlag=true)
+     * @param string $callbackUrl Webhook URL for completion (required)
      */
     public function extend(
-        string $audioUrl,
+        string $audioId,
         string $prompt,
-        int $continueAt = 0,
-        string $model = self::DEFAULT_MODEL
+        string $model = self::DEFAULT_MODEL,
+        bool $defaultParamFlag = false,
+        ?int $continueAt = null,
+        ?string $style = null,
+        ?string $title = null,
+        string $callbackUrl = ''
     ): array {
-        return $this->kieApi->post('/api/v1/suno/extend', [
-            'audio_url' => $audioUrl,
+        $payload = [
+            'audioId' => $audioId,
             'prompt' => $prompt,
-            'continue_at' => $continueAt,
             'model' => $model,
-        ]);
+            'defaultParamFlag' => $defaultParamFlag,
+        ];
+
+        if ($callbackUrl) {
+            $payload['callBackUrl'] = $callbackUrl;
+        }
+
+        if ($defaultParamFlag) {
+            if ($continueAt !== null) {
+                $payload['continueAt'] = $continueAt;
+            }
+            if ($style) {
+                $payload['style'] = $style;
+            }
+            if ($title) {
+                $payload['title'] = $title;
+            }
+        }
+
+        return $this->kieApi->post('/api/v1/generate/extend', $payload);
     }
 
     /**
-     * Extract stems from audio (v5 feature)
-     * Separates vocals from instrumentals
+     * Separate vocals from instrumentals (stem separation)
      *
-     * @param string $audioUrl URL of the audio to process
+     * @param string $taskId Task ID from generate or extend
+     * @param string $audioId Audio ID to process
+     * @param string $type separate_vocal (2 stems) or split_stem (12 stems)
+     * @param string $callbackUrl Webhook URL for completion (required)
      */
-    public function extractStems(string $audioUrl): array
-    {
-        return $this->kieApi->post('/api/v1/suno/stems', [
-            'audio_url' => $audioUrl,
-        ]);
+    public function extractStems(
+        string $taskId,
+        string $audioId,
+        string $type = self::STEM_VOCAL,
+        string $callbackUrl = ''
+    ): array {
+        $payload = [
+            'taskId' => $taskId,
+            'audioId' => $audioId,
+            'type' => $type,
+        ];
+
+        if ($callbackUrl) {
+            $payload['callBackUrl'] = $callbackUrl;
+        }
+
+        return $this->kieApi->post('/api/v1/vocal-removal/generate', $payload);
     }
 
     /**
-     * Create a cover version in different style (v5 feature)
+     * Convert audio to MIDI
      *
-     * @param string $audioUrl URL of the original audio
-     * @param string $style Target style/genre
+     * @param string $taskId Task ID from stem separation
+     * @param string $callbackUrl Webhook URL for completion (required)
+     * @param string|null $audioId Specific audio ID (optional, processes all if omitted)
      */
-    public function createCover(string $audioUrl, string $style): array
-    {
-        return $this->kieApi->post('/api/v1/suno/cover', [
-            'audio_url' => $audioUrl,
-            'style' => $style,
-        ]);
+    public function convertToMidi(
+        string $taskId,
+        string $callbackUrl = '',
+        ?string $audioId = null
+    ): array {
+        $payload = [
+            'taskId' => $taskId,
+        ];
+
+        if ($callbackUrl) {
+            $payload['callBackUrl'] = $callbackUrl;
+        }
+
+        if ($audioId) {
+            $payload['audioId'] = $audioId;
+        }
+
+        return $this->kieApi->post('/api/v1/midi/generate', $payload);
     }
 
     /**
-     * Convert audio to MIDI (v5 feature)
+     * Generate cover image for a track
      *
-     * @param string $audioUrl URL of the audio to convert
+     * @param string $taskId Task ID from music generation
+     * @param string $callbackUrl Webhook URL for completion (required)
      */
-    public function convertToMidi(string $audioUrl): array
+    public function generateCover(string $taskId, string $callbackUrl = ''): array
     {
-        return $this->kieApi->post('/api/v1/suno/midi', [
-            'audio_url' => $audioUrl,
-        ]);
+        $payload = [
+            'taskId' => $taskId,
+        ];
+
+        if ($callbackUrl) {
+            $payload['callBackUrl'] = $callbackUrl;
+        }
+
+        return $this->kieApi->post('/api/v1/suno/cover/generate', $payload);
     }
 
     /**
-     * Get task status
+     * Get music task status/details
+     *
+     * @param string $taskId Task ID from generate response
      */
     public function getTaskStatus(string $taskId): array
     {
-        return $this->kieApi->get('/api/v1/suno/record-info', ['task_id' => $taskId]);
+        return $this->kieApi->get('/api/v1/generate/record-info', ['taskId' => $taskId]);
     }
 
     /**
-     * Wait for task completion
+     * Wait for task completion (polling)
+     *
+     * @param string $taskId Task ID
+     * @param int $maxWaitSeconds Maximum wait time
      */
     public function waitForCompletion(string $taskId, int $maxWaitSeconds = 300): array
     {
-        $maxAttempts = $maxWaitSeconds / 5;
+        $maxAttempts = (int) ($maxWaitSeconds / 5);
 
         return $this->kieApi->pollTaskStatus(
-            '/api/v1/suno/record-info',
+            '/api/v1/generate/record-info',
             $taskId,
-            (int) $maxAttempts,
+            $maxAttempts,
             5
         );
     }
@@ -182,15 +308,22 @@ class SunoService
      */
     public function generateAndWait(
         string $prompt,
-        ?string $lyrics = null,
-        ?string $title = null,
-        ?string $style = null,
+        string $model = self::DEFAULT_MODEL,
+        bool $customMode = false,
         bool $instrumental = false,
-        string $model = self::DEFAULT_MODEL
+        ?string $style = null,
+        ?string $title = null
     ): array {
-        $result = $this->generate($prompt, $lyrics, $title, $style, $instrumental, $model);
+        $result = $this->generate(
+            prompt: $prompt,
+            model: $model,
+            customMode: $customMode,
+            instrumental: $instrumental,
+            style: $style,
+            title: $title
+        );
 
-        $taskId = $result['task_id'] ?? null;
+        $taskId = $result['taskId'] ?? null;
 
         if (!$taskId) {
             throw new \RuntimeException('No task ID returned from Suno API');
@@ -205,30 +338,45 @@ class SunoService
     public static function getModels(): array
     {
         return [
-            self::MODEL_V3_5 => [
-                'name' => 'Suno v3.5',
-                'description' => 'Legacy - Structured songs',
-                'max_prompt_chars' => 500,
-            ],
             self::MODEL_V4 => [
-                'name' => 'Suno v4',
+                'name' => 'Suno V4',
                 'description' => 'Improved vocal quality',
-                'max_prompt_chars' => 1000,
+                'max_duration' => 240, // 4 minutes
+                'max_prompt_chars' => 3000,
+                'max_style_chars' => 200,
+                'max_title_chars' => 80,
             ],
             self::MODEL_V4_5 => [
-                'name' => 'Suno v4.5',
-                'description' => 'Smart prompts',
-                'max_prompt_chars' => 1000,
+                'name' => 'Suno V4.5',
+                'description' => 'Smart prompts, faster generation',
+                'max_duration' => 480, // 8 minutes
+                'max_prompt_chars' => 5000,
+                'max_style_chars' => 1000,
+                'max_title_chars' => 100,
             ],
             self::MODEL_V4_5_PLUS => [
-                'name' => 'Suno v4.5+',
-                'description' => 'Richer sound',
-                'max_prompt_chars' => 1000,
+                'name' => 'Suno V4.5+',
+                'description' => 'Richer sound quality',
+                'max_duration' => 480,
+                'max_prompt_chars' => 5000,
+                'max_style_chars' => 1000,
+                'max_title_chars' => 100,
+            ],
+            self::MODEL_V4_5_ALL => [
+                'name' => 'Suno V4.5 ALL',
+                'description' => 'Enhanced prompting',
+                'max_duration' => 480,
+                'max_prompt_chars' => 5000,
+                'max_style_chars' => 1000,
+                'max_title_chars' => 80,
             ],
             self::MODEL_V5 => [
-                'name' => 'Suno v5',
-                'description' => 'Latest - Studio quality, best musicality',
-                'max_prompt_chars' => 1000,
+                'name' => 'Suno V5',
+                'description' => 'Superior expression, fastest generation',
+                'max_duration' => 480,
+                'max_prompt_chars' => 5000,
+                'max_style_chars' => 1000,
+                'max_title_chars' => 100,
             ],
         ];
     }
@@ -276,6 +424,29 @@ class SunoService
             'uplifting' => 'Uplifting',
             'dark' => 'Dark',
             'peaceful' => 'Peaceful',
+        ];
+    }
+
+    /**
+     * Stem separation types
+     */
+    public static function getStemTypes(): array
+    {
+        return [
+            self::STEM_VOCAL => [
+                'name' => 'Vocal Separation',
+                'description' => '2 stems: vocals + instrumental',
+                'stems' => ['vocal', 'instrumental'],
+            ],
+            self::STEM_SPLIT => [
+                'name' => 'Full Stem Split',
+                'description' => 'Up to 12 individual instrument stems',
+                'stems' => [
+                    'vocals', 'backing_vocals', 'drums', 'bass', 'guitar',
+                    'keyboard', 'strings', 'brass', 'woodwinds', 'percussion',
+                    'synth', 'fx',
+                ],
+            ],
         ];
     }
 }

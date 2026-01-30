@@ -55,7 +55,7 @@ class ImageService
      */
     public function generateFast(string $prompt, string $aspectRatio = '16:9'): array
     {
-        return $this->nanoBanana->generateFast($prompt, $aspectRatio);
+        return $this->nanoBanana->generateStandard($prompt, $aspectRatio);
     }
 
     /**
@@ -66,7 +66,7 @@ class ImageService
         string $aspectRatio = '16:9',
         string $resolution = NanoBananaService::RESOLUTION_4K
     ): array {
-        return $this->nanoBanana->generatePro($prompt, $aspectRatio, $resolution);
+        return $this->nanoBanana->generatePro($prompt, [], $aspectRatio, $resolution);
     }
 
     /**
@@ -74,7 +74,7 @@ class ImageService
      */
     public function edit(array $imageUrls, string $prompt): array
     {
-        return $this->nanoBanana->edit($imageUrls, $prompt);
+        return $this->nanoBanana->edit($prompt, $imageUrls);
     }
 
     /**

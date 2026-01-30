@@ -55,16 +55,20 @@ class GenerateMusicJob implements ShouldQueue
             $suno->setApiKey($apiKey);
 
             // Generate music (default: Suno v5)
+            // If lyrics provided, use custom mode (prompt becomes lyrics)
+            $lyrics = $this->config['lyrics'] ?? null;
+            $hasLyrics = !empty($lyrics);
+
             $result = $suno->generate(
-                prompt: $this->config['prompt'],
-                lyrics: $this->config['lyrics'] ?? null,
-                title: $this->config['title'] ?? null,
-                style: $this->config['style'] ?? null,
+                prompt: $hasLyrics ? $lyrics : $this->config['prompt'],
+                model: $this->config['model'] ?? SunoService::DEFAULT_MODEL,
+                customMode: $hasLyrics,
                 instrumental: $this->config['instrumental'] ?? false,
-                model: $this->config['model'] ?? SunoService::DEFAULT_MODEL
+                style: $this->config['style'] ?? null,
+                title: $this->config['title'] ?? null
             );
 
-            $taskId = $result['task_id'] ?? null;
+            $taskId = $result['taskId'] ?? $result['task_id'] ?? null;
 
             if (!$taskId) {
                 throw new \RuntimeException('No task ID returned from Suno API');
