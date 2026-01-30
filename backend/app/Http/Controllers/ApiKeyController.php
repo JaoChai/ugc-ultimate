@@ -39,7 +39,7 @@ class ApiKeyController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'service' => ['required', 'string', 'in:kie,r2'],
+            'service' => ['required', 'string', 'in:openrouter,kie'],
             'name' => ['required', 'string', 'max:255'],
             'key' => ['required', 'string'],
         ]);
@@ -120,8 +120,8 @@ class ApiKeyController extends Controller
         }
 
         $result = match ($apiKey->service) {
+            'openrouter' => $this->testOpenRouterApiKey($decryptedKey, $apiKey),
             'kie' => $this->testKieApiKey($decryptedKey, $apiKey),
-            'r2' => $this->testR2ApiKey($decryptedKey),
             default => ['success' => false, 'message' => 'Unknown service'],
         };
 
@@ -162,11 +162,45 @@ class ApiKeyController extends Controller
         }
     }
 
-    private function testR2ApiKey(string $key): array
+    private function testOpenRouterApiKey(string $key, ApiKey $apiKey): array
     {
-        return [
-            'success' => true,
-            'message' => 'R2 key stored (manual verification required)',
-        ];
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $key,
+            ])->get('https://openrouter.ai/api/v1/auth/key');
+
+            if ($response->successful()) {
+                $data = $response->json();
+
+                // Update credits if available
+                $credits = $data['data']['limit_remaining'] ?? $data['data']['usage'] ?? null;
+                if ($credits !== null) {
+                    $apiKey->update([
+                        'credits_remaining' => $credits,
+                        'last_used_at' => now(),
+                    ]);
+                } else {
+                    $apiKey->update(['last_used_at' => now()]);
+                }
+
+                return [
+                    'success' => true,
+                    'message' => 'OpenRouter API key is valid',
+                    'credits' => $credits,
+                    'label' => $data['data']['label'] ?? null,
+                ];
+            }
+
+            $error = $response->json();
+            return [
+                'success' => false,
+                'message' => $error['error']['message'] ?? 'API key validation failed',
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success' => false,
+                'message' => 'Connection error: ' . $e->getMessage(),
+            ];
+        }
     }
 }

@@ -146,14 +146,40 @@ export interface User {
 
 export interface ApiKeyItem {
   id: number;
-  service: string;
+  service: ApiKeyService;
   name: string;
   key_masked: string;
-  credits_remaining: number;
+  credits_remaining: number | null;
   is_active: boolean;
   last_used_at: string | null;
   created_at: string;
 }
+
+// API Key Service Types
+export type ApiKeyService = 'openrouter' | 'kie';
+
+export const API_KEY_SERVICES: Record<ApiKeyService, {
+  label: string;
+  description: string;
+  usedFor: string;
+  getKeyUrl: string;
+  hasCredits: boolean;
+}> = {
+  openrouter: {
+    label: 'OpenRouter',
+    description: 'LLM Gateway - Access GPT-4, Claude, Gemini and more',
+    usedFor: 'AI Agents (Theme, Music, Visual Director)',
+    getKeyUrl: 'https://openrouter.ai/keys',
+    hasCredits: true,
+  },
+  kie: {
+    label: 'kie.ai',
+    description: 'Image & Music Generation - Nano Banana, Suno AI',
+    usedFor: 'Image Generator, Music Composer',
+    getKeyUrl: 'https://kie.ai',
+    hasCredits: true,
+  },
+};
 
 export interface Project {
   id: number;
