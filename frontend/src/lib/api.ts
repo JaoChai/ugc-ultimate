@@ -279,19 +279,21 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
-// Pipeline Types
+// Pipeline Interface
 export interface Pipeline {
   id: number;
   project_id: number;
   user_id: number;
+  pipeline_type: PipelineType;
   mode: 'auto' | 'manual';
   status: 'pending' | 'running' | 'paused' | 'completed' | 'failed';
   current_step: string | null;
   current_step_progress: number;
   config: {
-    theme: string;
-    duration: number;
-    platform: string;
+    theme?: string;
+    song_brief?: string;
+    duration?: number;
+    platform?: string;
   };
   steps_state: Record<string, PipelineStepState>;
   error_message: string | null;
@@ -367,6 +369,31 @@ export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
 };
 
 export const PIPELINE_STEPS = AGENT_TYPES;
+
+// Music Video Pipeline Agent Types
+export const MUSIC_VIDEO_AGENT_TYPES = [
+  'song_architect',
+  'suno_expert',
+  'song_selector',
+  'visual_designer',
+] as const;
+
+export type MusicVideoAgentType = (typeof MUSIC_VIDEO_AGENT_TYPES)[number];
+
+export const MUSIC_VIDEO_AGENT_TYPE_LABELS: Record<MusicVideoAgentType, string> = {
+  song_architect: 'Song Architect',
+  suno_expert: 'Suno Expert',
+  song_selector: 'Song Selector',
+  visual_designer: 'Visual Designer',
+};
+
+// Pipeline Types
+export type PipelineType = 'video' | 'music_video';
+
+export const PIPELINE_TYPE_LABELS: Record<PipelineType, string> = {
+  video: 'Video Pipeline',
+  music_video: 'Music Video Pipeline',
+};
 
 // Projects API
 export const projectsApi = {

@@ -454,4 +454,125 @@ class FFMpegService
         $this->executeCommand($command);
         return $outputPath;
     }
+
+    /**
+     * Compose simple video from a single static image and audio
+     * No Ken Burns effect, no transitions - just static image for duration of audio
+     *
+     * @param string $imageUrl URL of the image
+     * @param string $audioUrl URL of the audio
+     * @param array $settings Optional settings (width, height)
+     * @return array Result with video URL
+     */
+    public function composeSimpleVideo(
+        string $imageUrl,
+        string $audioUrl,
+        array $settings = []
+    ): array {
+        $jobId = Str::uuid()->toString();
+        $outputPath = "{$this->tempDir}/{$jobId}_output.mp4";
+
+        try {
+            // Download assets
+            $localImage = $this->downloadSingleImage($imageUrl, $jobId);
+            $localAudio = $this->downloadAudio($audioUrl, $jobId);
+
+            // Get audio duration
+            $audioDuration = $this->getMediaDuration($localAudio);
+
+            if ($audioDuration <= 0) {
+                throw new \RuntimeException('Invalid audio duration');
+            }
+
+            Log::info('FFMpegService: Composing simple video', [
+                'job_id' => $jobId,
+                'audio_duration' => $audioDuration,
+            ]);
+
+            // Build simple compose command (static image + audio)
+            $command = $this->buildSimpleComposeCommand(
+                $localImage,
+                $localAudio,
+                $outputPath,
+                $audioDuration,
+                $settings
+            );
+
+            $this->executeCommand($command);
+
+            // Upload to R2
+            $r2Url = $this->uploadToR2($outputPath, $jobId);
+
+            // Cleanup
+            $this->cleanup($jobId);
+
+            return [
+                'success' => true,
+                'video_url' => $r2Url,
+                'duration' => $audioDuration,
+                'job_id' => $jobId,
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('FFMpegService: Simple video composition failed', [
+                'job_id' => $jobId,
+                'error' => $e->getMessage(),
+            ]);
+            $this->cleanup($jobId);
+            throw $e;
+        }
+    }
+
+    /**
+     * Download a single image to temp directory
+     */
+    protected function downloadSingleImage(string $url, string $jobId): string
+    {
+        $extension = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
+        $localPath = "{$this->tempDir}/{$jobId}_image.{$extension}";
+
+        $response = Http::timeout(60)->get($url);
+        if (!$response->successful()) {
+            throw new \RuntimeException('Failed to download image');
+        }
+
+        file_put_contents($localPath, $response->body());
+        return $localPath;
+    }
+
+    /**
+     * Build FFmpeg command for simple video (static image + audio)
+     */
+    protected function buildSimpleComposeCommand(
+        string $imagePath,
+        string $audioPath,
+        string $outputPath,
+        float $audioDuration,
+        array $settings
+    ): array {
+        $width = $settings['width'] ?? 1920;
+        $height = $settings['height'] ?? 1080;
+
+        // Simple command: loop image for audio duration, combine with audio
+        // -loop 1: loop the image
+        // -t: duration (same as audio)
+        // -tune stillimage: optimize for static content
+        // -shortest: end when shortest stream ends (audio)
+        return [
+            $this->ffmpegPath, '-y',
+            '-loop', '1',
+            '-i', $imagePath,
+            '-i', $audioPath,
+            '-vf', "scale={$width}:{$height}:force_original_aspect_ratio=decrease,pad={$width}:{$height}:(ow-iw)/2:(oh-ih)/2,setsar=1",
+            '-c:v', 'libx264',
+            '-tune', 'stillimage',
+            '-preset', 'medium',
+            '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-shortest',
+            $outputPath,
+        ];
+    }
 }

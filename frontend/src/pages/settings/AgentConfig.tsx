@@ -3,14 +3,26 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AgentConfigEditor } from '@/components/agent/AgentConfigEditor';
-import { agentConfigsApi, PIPELINE_STEPS, AGENT_TYPE_LABELS, type AgentConfig, type AgentType } from '@/lib/api';
-import { ArrowLeft, Loader2, Plus } from 'lucide-react';
+import {
+  agentConfigsApi,
+  PIPELINE_STEPS,
+  AGENT_TYPE_LABELS,
+  MUSIC_VIDEO_AGENT_TYPES,
+  MUSIC_VIDEO_AGENT_TYPE_LABELS,
+  type AgentConfig,
+  type AgentType,
+  type MusicVideoAgentType,
+} from '@/lib/api';
+import { ArrowLeft, Loader2, Plus, Music, Video } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+type PipelineCategory = 'video' | 'music_video';
 
 export default function AgentConfigPage() {
   const [configs, setConfigs] = useState<AgentConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<AgentType>(PIPELINE_STEPS[0]);
+  const [pipelineCategory, setPipelineCategory] = useState<PipelineCategory>('video');
+  const [activeTab, setActiveTab] = useState<string>(PIPELINE_STEPS[0]);
 
   const fetchConfigs = useCallback(async () => {
     try {
@@ -27,11 +39,20 @@ export default function AgentConfigPage() {
     fetchConfigs();
   }, [fetchConfigs]);
 
-  const getConfigsForType = (agentType: AgentType) => {
+  // Reset active tab when pipeline category changes
+  useEffect(() => {
+    if (pipelineCategory === 'video') {
+      setActiveTab(PIPELINE_STEPS[0]);
+    } else {
+      setActiveTab(MUSIC_VIDEO_AGENT_TYPES[0]);
+    }
+  }, [pipelineCategory]);
+
+  const getConfigsForType = (agentType: string) => {
     return configs.filter((c) => c.agent_type === agentType);
   };
 
-  const getDefaultConfig = (agentType: AgentType): AgentConfig | null => {
+  const getDefaultConfig = (agentType: string): AgentConfig | null => {
     const typeConfigs = getConfigsForType(agentType);
     return typeConfigs.find((c) => c.is_default) || typeConfigs[0] || null;
   };
@@ -54,6 +75,17 @@ export default function AgentConfigPage() {
       }
       return [...prev, savedConfig];
     });
+  };
+
+  const getCurrentSteps = () => {
+    return pipelineCategory === 'video' ? PIPELINE_STEPS : MUSIC_VIDEO_AGENT_TYPES;
+  };
+
+  const getLabel = (step: string) => {
+    if (pipelineCategory === 'video') {
+      return AGENT_TYPE_LABELS[step as AgentType];
+    }
+    return MUSIC_VIDEO_AGENT_TYPE_LABELS[step as MusicVideoAgentType];
   };
 
   if (loading) {
@@ -84,17 +116,50 @@ export default function AgentConfigPage() {
           </div>
         </div>
 
+        {/* Pipeline Category Switcher */}
+        <div className="flex gap-2">
+          <Button
+            variant={pipelineCategory === 'video' ? 'default' : 'outline'}
+            onClick={() => setPipelineCategory('video')}
+            className="flex items-center gap-2"
+          >
+            <Video className="h-4 w-4" />
+            Video Pipeline
+          </Button>
+          <Button
+            variant={pipelineCategory === 'music_video' ? 'default' : 'outline'}
+            onClick={() => setPipelineCategory('music_video')}
+            className="flex items-center gap-2"
+          >
+            <Music className="h-4 w-4" />
+            Music Video Pipeline
+          </Button>
+        </div>
+
+        {/* Description based on pipeline type */}
+        <div className="text-sm text-muted-foreground bg-muted/50 p-4 rounded-lg">
+          {pipelineCategory === 'video' ? (
+            <p>
+              <strong>Video Pipeline:</strong> Theme Director → Music Composer → Visual Director → Image Generator → Video Composer
+            </p>
+          ) : (
+            <p>
+              <strong>Music Video Pipeline:</strong> Song Architect → Suno Expert → Song Selector → Visual Designer → FFmpeg Compose
+            </p>
+          )}
+        </div>
+
         {/* Agent Type Tabs */}
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AgentType)}>
-          <TabsList className="grid grid-cols-5 w-full">
-            {PIPELINE_STEPS.map((step) => (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className={`grid w-full ${pipelineCategory === 'video' ? 'grid-cols-5' : 'grid-cols-4'}`}>
+            {getCurrentSteps().map((step) => (
               <TabsTrigger key={step} value={step} className="text-xs md:text-sm">
-                {AGENT_TYPE_LABELS[step].replace(' ', '\n')}
+                {getLabel(step)?.replace(' ', '\n')}
               </TabsTrigger>
             ))}
           </TabsList>
 
-          {PIPELINE_STEPS.map((step) => (
+          {getCurrentSteps().map((step) => (
             <TabsContent key={step} value={step} className="space-y-4 mt-4">
               {/* Config Editor */}
               <AgentConfigEditor
@@ -129,9 +194,9 @@ export default function AgentConfigPage() {
                   id: 0,
                   user_id: 0,
                   agent_type: step,
-                  name: `New ${AGENT_TYPE_LABELS[step]} Config`,
+                  name: `New ${getLabel(step)} Config`,
                   system_prompt: '',
-                  model: 'google/gemini-2.0-flash-exp',
+                  model: 'google/gemini-3-flash-preview',
                   parameters: { temperature: 0.7, max_tokens: 2000 },
                   is_default: false,
                   created_at: new Date().toISOString(),

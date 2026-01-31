@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\Pipeline\RunMusicVideoPipelineJob;
 use App\Jobs\Pipeline\RunPipelineJob;
 use App\Jobs\Pipeline\RunPipelineStepJob;
 use App\Models\ApiKey;
@@ -38,8 +39,10 @@ class PipelineController extends Controller
         $this->authorize('update', $project);
 
         $validated = $request->validate([
+            'pipeline_type' => ['nullable', 'string', 'in:video,music_video'],
             'mode' => ['nullable', 'string', 'in:auto,manual'],
             'theme' => ['nullable', 'string', 'max:500'],
+            'song_brief' => ['nullable', 'string', 'max:2000'],
             'duration' => ['nullable', 'integer', 'min:15', 'max:300'],
             'platform' => ['nullable', 'string', 'in:youtube,tiktok,instagram'],
         ]);
@@ -56,16 +59,27 @@ class PipelineController extends Controller
             ], 400);
         }
 
+        $pipelineType = $validated['pipeline_type'] ?? Pipeline::TYPE_VIDEO;
+
+        // Build config based on pipeline type
+        $config = [
+            'theme' => $validated['theme'] ?? $project->title,
+            'duration' => $validated['duration'] ?? 60,
+            'platform' => $validated['platform'] ?? 'youtube',
+        ];
+
+        // For music_video pipeline, add song_brief
+        if ($pipelineType === Pipeline::TYPE_MUSIC_VIDEO) {
+            $config['song_brief'] = $validated['song_brief'] ?? $validated['theme'] ?? $project->title;
+        }
+
         $pipeline = Pipeline::create([
             'project_id' => $project->id,
             'user_id' => $request->user()->id,
+            'pipeline_type' => $pipelineType,
             'mode' => $validated['mode'] ?? Pipeline::MODE_AUTO,
             'status' => Pipeline::STATUS_PENDING,
-            'config' => [
-                'theme' => $validated['theme'] ?? $project->title,
-                'duration' => $validated['duration'] ?? 60,
-                'platform' => $validated['platform'] ?? 'youtube',
-            ],
+            'config' => $config,
             'steps_state' => [],
         ]);
 
@@ -122,9 +136,15 @@ class PipelineController extends Controller
             return response()->json(['error' => 'Kie API key not found'], 400);
         }
 
-        // Dispatch pipeline job
+        // Dispatch pipeline job based on type
         if ($pipeline->mode === Pipeline::MODE_AUTO) {
-            RunPipelineJob::dispatch($pipeline->id, $openRouterKey->id, $kieKey->id);
+            if ($pipeline->pipeline_type === Pipeline::TYPE_MUSIC_VIDEO) {
+                // Use Music Video Pipeline
+                RunMusicVideoPipelineJob::dispatch($pipeline->id, $openRouterKey->id, $kieKey->id);
+            } else {
+                // Use standard Video Pipeline
+                RunPipelineJob::dispatch($pipeline->id, $openRouterKey->id, $kieKey->id);
+            }
         } else {
             // For manual mode, just mark as running and wait for step commands
             $pipeline->update([
@@ -281,8 +301,11 @@ class PipelineController extends Controller
     {
         $this->authorize('view', $pipeline);
 
-        if (!in_array($step, Pipeline::STEPS)) {
-            return response()->json(['error' => 'Invalid step'], 400);
+        // Get valid steps based on pipeline type
+        $validSteps = $pipeline->getSteps();
+
+        if (!in_array($step, $validSteps)) {
+            return response()->json(['error' => 'Invalid step for this pipeline type'], 400);
         }
 
         $stepState = $pipeline->getStepState($step);
@@ -290,6 +313,19 @@ class PipelineController extends Controller
         return response()->json([
             'step' => $step,
             'state' => $stepState,
+        ]);
+    }
+
+    /**
+     * Get pipeline steps based on type
+     */
+    public function getSteps(Pipeline $pipeline): JsonResponse
+    {
+        $this->authorize('view', $pipeline);
+
+        return response()->json([
+            'pipeline_type' => $pipeline->pipeline_type,
+            'steps' => $pipeline->getSteps(),
         ]);
     }
 }

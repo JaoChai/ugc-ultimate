@@ -6,11 +6,29 @@ import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ModelSelector } from './ModelSelector';
-import { agentConfigsApi, type AgentConfig, AGENT_TYPE_LABELS, type AgentType } from '@/lib/api';
+import {
+  agentConfigsApi,
+  type AgentConfig,
+  AGENT_TYPE_LABELS,
+  MUSIC_VIDEO_AGENT_TYPE_LABELS,
+  type AgentType,
+  type MusicVideoAgentType,
+} from '@/lib/api';
 import { Save, RotateCcw, Play, Loader2, Star, StarOff } from 'lucide-react';
 
+// Helper to get label for any agent type
+const getAgentLabel = (agentType: string): string => {
+  if (agentType in AGENT_TYPE_LABELS) {
+    return AGENT_TYPE_LABELS[agentType as AgentType];
+  }
+  if (agentType in MUSIC_VIDEO_AGENT_TYPE_LABELS) {
+    return MUSIC_VIDEO_AGENT_TYPE_LABELS[agentType as MusicVideoAgentType];
+  }
+  return agentType;
+};
+
 interface AgentConfigEditorProps {
-  agentType: AgentType;
+  agentType: string;
   config?: AgentConfig | null;
   onSave?: (config: AgentConfig) => void;
   onTest?: (config: AgentConfig) => void;
@@ -172,7 +190,7 @@ export function AgentConfigEditor({ agentType, config, onSave, onTest }: AgentCo
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle className="text-lg">{AGENT_TYPE_LABELS[agentType]}</CardTitle>
+            <CardTitle className="text-lg">{getAgentLabel(agentType)}</CardTitle>
             <CardDescription>Configure the system prompt and model settings</CardDescription>
           </div>
           {config?.is_default && (

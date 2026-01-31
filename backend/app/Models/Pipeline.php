@@ -14,6 +14,7 @@ class Pipeline extends Model
     protected $fillable = [
         'project_id',
         'user_id',
+        'pipeline_type',
         'mode',
         'status',
         'current_step',
@@ -35,13 +36,25 @@ class Pipeline extends Model
         ];
     }
 
-    // Pipeline steps in order
+    // Pipeline types
+    public const TYPE_VIDEO = 'video';
+    public const TYPE_MUSIC_VIDEO = 'music_video';
+
+    // Pipeline steps in order (original video pipeline)
     public const STEPS = [
         'theme_director',
         'music_composer',
         'visual_director',
         'image_generator',
         'video_composer',
+    ];
+
+    // Music Video Pipeline steps
+    public const MUSIC_VIDEO_STEPS = [
+        'song_architect',
+        'suno_expert',
+        'song_selector',
+        'visual_designer',
     ];
 
     // Status constants
@@ -77,18 +90,33 @@ class Pipeline extends Model
     }
 
     // Helpers
+    public function getSteps(): array
+    {
+        return match ($this->pipeline_type) {
+            self::TYPE_MUSIC_VIDEO => self::MUSIC_VIDEO_STEPS,
+            default => self::STEPS,
+        };
+    }
+
     public function getNextStep(): ?string
     {
+        $steps = $this->getSteps();
+
         if (!$this->current_step) {
-            return self::STEPS[0];
+            return $steps[0];
         }
 
-        $currentIndex = array_search($this->current_step, self::STEPS);
-        if ($currentIndex === false || $currentIndex >= count(self::STEPS) - 1) {
+        $currentIndex = array_search($this->current_step, $steps);
+        if ($currentIndex === false || $currentIndex >= count($steps) - 1) {
             return null;
         }
 
-        return self::STEPS[$currentIndex + 1];
+        return $steps[$currentIndex + 1];
+    }
+
+    public function isMusicVideoPipeline(): bool
+    {
+        return $this->pipeline_type === self::TYPE_MUSIC_VIDEO;
     }
 
     public function getStepState(string $step): array
