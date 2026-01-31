@@ -3,21 +3,39 @@
 namespace App\Services\AI;
 
 use App\Models\ApiKey;
-use App\Services\GeminiService;
+use App\Services\OpenRouterService;
 
 class ConceptGeneratorService
 {
-    protected GeminiService $gemini;
+    protected OpenRouterService $openRouter;
 
-    public function __construct(GeminiService $gemini)
+    // Default model for concept generation
+    public const DEFAULT_MODEL = 'google/gemini-2.0-flash-exp';
+
+    public function __construct(OpenRouterService $openRouter)
     {
-        $this->gemini = $gemini;
+        $this->openRouter = $openRouter;
     }
 
     public function setApiKey(ApiKey $apiKey): self
     {
-        $this->gemini->setApiKey($apiKey);
+        $this->openRouter->setApiKey($apiKey);
         return $this;
+    }
+
+    /**
+     * Map thinking level to temperature
+     * Higher thinking = more exploration = higher temperature
+     */
+    protected function mapThinkingToTemperature(string $thinkingLevel): float
+    {
+        return match ($thinkingLevel) {
+            'none' => 0.5,
+            'low' => 0.6,
+            'medium' => 0.7,
+            'high' => 0.8,
+            default => 0.7,
+        };
     }
 
     /**
@@ -25,7 +43,7 @@ class ConceptGeneratorService
      */
     public function generateFullConcept(string $theme, array $options = []): array
     {
-        $thinkingLevel = $options['thinking_level'] ?? GeminiService::THINKING_MEDIUM;
+        $thinkingLevel = $options['thinking_level'] ?? 'medium';
 
         // Step 1: Generate music concept
         $musicConcept = $this->generateMusicConcept($theme, $options, $thinkingLevel);
@@ -48,27 +66,29 @@ class ConceptGeneratorService
     /**
      * Generate music concept only
      */
-    public function generateMusicConcept(string $theme, array $options = [], string $thinkingLevel = GeminiService::THINKING_MEDIUM): array
+    public function generateMusicConcept(string $theme, array $options = [], string $thinkingLevel = 'medium'): array
     {
         $prompt = PromptTemplates::musicConcept($theme, $options);
+        $temperature = $this->mapThinkingToTemperature($thinkingLevel);
 
         try {
-            return $this->gemini->generateJson(
+            return $this->openRouter->generateJson(
+                PromptTemplates::musicConceptSystem(),
                 $prompt,
                 PromptTemplates::musicConceptSchema(),
-                GeminiService::MODEL_GEMINI_FLASH,
-                $thinkingLevel
+                self::DEFAULT_MODEL,
+                $temperature
             );
         } catch (\Exception $e) {
             // Fallback: try with regular generation and parse manually
-            $response = $this->gemini->generateWithSystem(
+            $response = $this->openRouter->chat(
                 PromptTemplates::musicConceptSystem(),
                 $prompt,
-                GeminiService::MODEL_GEMINI_FLASH,
-                $thinkingLevel
+                self::DEFAULT_MODEL,
+                $temperature
             );
 
-            $content = $this->gemini->extractContent($response);
+            $content = $this->openRouter->extractContent($response);
             return $this->parseJsonFromText($content);
         }
     }
@@ -76,45 +96,48 @@ class ConceptGeneratorService
     /**
      * Generate lyrics based on concept
      */
-    public function generateLyrics(array $musicConcept, array $options = [], string $thinkingLevel = GeminiService::THINKING_MEDIUM): string
+    public function generateLyrics(array $musicConcept, array $options = [], string $thinkingLevel = 'medium'): string
     {
         $prompt = PromptTemplates::lyrics($musicConcept, $options);
+        // Use higher temperature for lyrics (creativity)
+        $temperature = max($this->mapThinkingToTemperature($thinkingLevel), 0.8);
 
-        $response = $this->gemini->generateWithSystem(
+        $response = $this->openRouter->chat(
             PromptTemplates::lyricsSystem(),
             $prompt,
-            GeminiService::MODEL_GEMINI_FLASH,
-            $thinkingLevel,
-            0.8 // Slightly higher temperature for creativity
+            self::DEFAULT_MODEL,
+            $temperature
         );
 
-        return $this->gemini->extractContent($response);
+        return $this->openRouter->extractContent($response);
     }
 
     /**
      * Generate visual concept
      */
-    public function generateVisualConcept(array $musicConcept, string $lyrics, array $options = [], string $thinkingLevel = GeminiService::THINKING_MEDIUM): array
+    public function generateVisualConcept(array $musicConcept, string $lyrics, array $options = [], string $thinkingLevel = 'medium'): array
     {
         $prompt = PromptTemplates::visualConcept($musicConcept, $lyrics, $options);
+        $temperature = $this->mapThinkingToTemperature($thinkingLevel);
 
         try {
-            return $this->gemini->generateJson(
+            return $this->openRouter->generateJson(
+                PromptTemplates::visualConceptSystem(),
                 $prompt,
                 PromptTemplates::visualConceptSchema(),
-                GeminiService::MODEL_GEMINI_FLASH,
-                $thinkingLevel
+                self::DEFAULT_MODEL,
+                $temperature
             );
         } catch (\Exception $e) {
             // Fallback
-            $response = $this->gemini->generateWithSystem(
+            $response = $this->openRouter->chat(
                 PromptTemplates::visualConceptSystem(),
                 $prompt,
-                GeminiService::MODEL_GEMINI_FLASH,
-                $thinkingLevel
+                self::DEFAULT_MODEL,
+                $temperature
             );
 
-            $content = $this->gemini->extractContent($response);
+            $content = $this->openRouter->extractContent($response);
             return $this->parseJsonFromText($content);
         }
     }

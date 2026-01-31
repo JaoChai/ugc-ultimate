@@ -6,7 +6,6 @@ use App\Models\ApiKey;
 use App\Models\JobLog;
 use App\Models\Project;
 use App\Services\AI\ConceptGeneratorService;
-use App\Services\GeminiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -31,14 +30,14 @@ class GenerateConceptJob implements ShouldQueue
     {
         $project = Project::findOrFail($this->projectId);
 
-        // Get kie.ai API key
+        // Get OpenRouter API key for LLM
         $apiKey = ApiKey::where('user_id', $project->user_id)
-            ->where('service', 'kie')
+            ->where('service', 'openrouter')
             ->where('is_active', true)
             ->first();
 
         if (!$apiKey) {
-            throw new \RuntimeException('No active kie.ai API key found');
+            throw new \RuntimeException('No active OpenRouter API key found. Please add your OpenRouter API key in Settings.');
         }
 
         // Create job log
@@ -66,7 +65,7 @@ class GenerateConceptJob implements ShouldQueue
                 'scene_count' => $this->config['scene_count'] ?? 4,
                 'aspect_ratio' => $this->config['aspect_ratio'] ?? '16:9',
                 'visual_style' => $this->config['visual_style'] ?? 'cinematic',
-                'thinking_level' => $this->config['thinking_level'] ?? GeminiService::THINKING_MEDIUM,
+                'thinking_level' => $this->config['thinking_level'] ?? 'medium',
             ];
 
             // Generate full concept
