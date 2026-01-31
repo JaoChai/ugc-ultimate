@@ -97,8 +97,9 @@ class ImageGeneratorService extends BaseAgentService
             }
 
             // Update progress
-            $submitProgress = (int)(($index + 1) / $totalScenes * 40) + 5;
-            $this->logProgress($submitProgress, "Submitted {$index + 1}/{$totalScenes} images...");
+            $submitted = $index + 1;
+            $submitProgress = (int)($submitted / $totalScenes * 40) + 5;
+            $this->logProgress($submitProgress, "Submitted {$submitted}/{$totalScenes} images...");
         }
 
         // Step 2: Wait for all tasks to complete
