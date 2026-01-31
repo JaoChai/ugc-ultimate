@@ -29,6 +29,9 @@ Route::prefix('webhooks')->group(function () {
     Route::post('/r2', [WebhookController::class, 'handleR2']);
 });
 
+// Public agent config routes (default prompts are not user-specific)
+Route::get('/agent-configs/defaults/{agentType}', [AgentConfigController::class, 'getDefaultPrompt']);
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     // Auth
@@ -87,11 +90,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{pipeline}/step/{step}', [PipelineController::class, 'stepResult']);
     });
 
-    // Agent Configs
+    // Agent Configs (protected - user-specific configs)
     Route::prefix('agent-configs')->group(function () {
         Route::get('/', [AgentConfigController::class, 'index']);
         Route::post('/', [AgentConfigController::class, 'store']);
-        Route::get('/defaults/{agentType}', [AgentConfigController::class, 'getDefaultPrompt']);
         Route::get('/{agentConfig}', [AgentConfigController::class, 'show']);
         Route::put('/{agentConfig}', [AgentConfigController::class, 'update']);
         Route::delete('/{agentConfig}', [AgentConfigController::class, 'destroy']);
