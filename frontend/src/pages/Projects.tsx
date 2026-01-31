@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
@@ -23,6 +23,12 @@ import {
   Edit3,
   Loader2,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 function formatRelativeTime(dateString: string): string {
   const date = new Date(dateString);
@@ -42,9 +48,7 @@ export default function Projects() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [showDropdown, setShowDropdown] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -65,16 +69,6 @@ export default function Projects() {
     fetchProjects();
   }, [fetchProjects]);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(null);
-      }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleDelete = async (projectId: number) => {
     if (!confirm('Are you sure you want to delete this project?')) return;
@@ -88,7 +82,6 @@ export default function Projects() {
       alert('Failed to delete project');
     } finally {
       setDeleting(null);
-      setShowDropdown(null);
     }
   };
 
@@ -226,48 +219,39 @@ export default function Projects() {
                     </span>
                   </td>
                   <td className="py-4 px-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <div className="relative inline-block" ref={showDropdown === project.id ? dropdownRef : null}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowDropdown(showDropdown === project.id ? null : project.id);
-                        }}
-                      >
-                        <MoreVertical size={16} className="text-slate-500" />
-                      </Button>
-                      {showDropdown === project.id && (
-                        <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg border border-slate-200 shadow-lg py-1 z-10">
-                          <Link
-                            to={`/projects/${project.id}`}
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreVertical size={16} className="text-slate-500" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link to={`/projects/${project.id}`} className="flex items-center gap-2">
                             <Eye size={14} />
                             View
                           </Link>
-                          <Link
-                            to={`/projects/${project.id}/edit`}
-                            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
-                          >
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <Link to={`/projects/${project.id}/edit`} className="flex items-center gap-2">
                             <Edit3 size={14} />
                             Edit
                           </Link>
-                          <button
-                            onClick={() => handleDelete(project.id)}
-                            disabled={deleting === project.id}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-slate-50 transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            {deleting === project.id ? (
-                              <Loader2 size={14} className="animate-spin" />
-                            ) : (
-                              <Trash2 size={14} />
-                            )}
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(project.id)}
+                          disabled={deleting === project.id}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          {deleting === project.id ? (
+                            <Loader2 size={14} className="animate-spin mr-2" />
+                          ) : (
+                            <Trash2 size={14} className="mr-2" />
+                          )}
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
