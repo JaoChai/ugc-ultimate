@@ -2,15 +2,14 @@
 
 namespace App\Services\AI;
 
+use App\Models\AgentConfig;
 use App\Models\ApiKey;
 use App\Services\OpenRouterService;
 
 class ConceptGeneratorService
 {
     protected OpenRouterService $openRouter;
-
-    // Default model for concept generation
-    public const DEFAULT_MODEL = 'google/gemini-2.0-flash-exp';
+    protected ?int $userId = null;
 
     public function __construct(OpenRouterService $openRouter)
     {
@@ -20,7 +19,53 @@ class ConceptGeneratorService
     public function setApiKey(ApiKey $apiKey): self
     {
         $this->openRouter->setApiKey($apiKey);
+        // Store user_id to fetch their model config
+        $this->userId = $apiKey->user_id;
         return $this;
+    }
+
+    /**
+     * Get agent config for a specific type
+     */
+    protected function getAgentConfig(string $agentType): ?AgentConfig
+    {
+        if (!$this->userId) {
+            return null;
+        }
+
+        return AgentConfig::where('user_id', $this->userId)
+            ->where('agent_type', $agentType)
+            ->where('is_default', true)
+            ->first();
+    }
+
+    /**
+     * Get the model from user's AgentConfig or use default
+     */
+    protected function getModel(?string $agentType = null): string
+    {
+        $type = $agentType ?? AgentConfig::TYPE_THEME_DIRECTOR;
+        $config = $this->getAgentConfig($type);
+
+        if ($config && $config->model) {
+            return $config->model;
+        }
+
+        return AgentConfig::DEFAULT_MODEL;
+    }
+
+    /**
+     * Get system prompt from AgentConfig or fallback to PromptTemplates
+     */
+    protected function getSystemPrompt(string $agentType, string $fallbackPrompt): string
+    {
+        $config = $this->getAgentConfig($agentType);
+
+        if ($config && $config->system_prompt) {
+            return $config->system_prompt;
+        }
+
+        return $fallbackPrompt;
     }
 
     /**
@@ -70,21 +115,26 @@ class ConceptGeneratorService
     {
         $prompt = PromptTemplates::musicConcept($theme, $options);
         $temperature = $this->mapThinkingToTemperature($thinkingLevel);
+        $systemPrompt = $this->getSystemPrompt(
+            AgentConfig::TYPE_MUSIC_COMPOSER,
+            PromptTemplates::musicConceptSystem()
+        );
+        $model = $this->getModel(AgentConfig::TYPE_MUSIC_COMPOSER);
 
         try {
             return $this->openRouter->generateJson(
-                PromptTemplates::musicConceptSystem(),
+                $systemPrompt,
                 $prompt,
                 PromptTemplates::musicConceptSchema(),
-                self::DEFAULT_MODEL,
+                $model,
                 $temperature
             );
         } catch (\Exception $e) {
             // Fallback: try with regular generation and parse manually
             $response = $this->openRouter->chat(
-                PromptTemplates::musicConceptSystem(),
+                $systemPrompt,
                 $prompt,
-                self::DEFAULT_MODEL,
+                $model,
                 $temperature
             );
 
@@ -101,11 +151,16 @@ class ConceptGeneratorService
         $prompt = PromptTemplates::lyrics($musicConcept, $options);
         // Use higher temperature for lyrics (creativity)
         $temperature = max($this->mapThinkingToTemperature($thinkingLevel), 0.8);
+        $systemPrompt = $this->getSystemPrompt(
+            AgentConfig::TYPE_MUSIC_COMPOSER,
+            PromptTemplates::lyricsSystem()
+        );
+        $model = $this->getModel(AgentConfig::TYPE_MUSIC_COMPOSER);
 
         $response = $this->openRouter->chat(
-            PromptTemplates::lyricsSystem(),
+            $systemPrompt,
             $prompt,
-            self::DEFAULT_MODEL,
+            $model,
             $temperature
         );
 
@@ -119,21 +174,26 @@ class ConceptGeneratorService
     {
         $prompt = PromptTemplates::visualConcept($musicConcept, $lyrics, $options);
         $temperature = $this->mapThinkingToTemperature($thinkingLevel);
+        $systemPrompt = $this->getSystemPrompt(
+            AgentConfig::TYPE_VISUAL_DIRECTOR,
+            PromptTemplates::visualConceptSystem()
+        );
+        $model = $this->getModel(AgentConfig::TYPE_VISUAL_DIRECTOR);
 
         try {
             return $this->openRouter->generateJson(
-                PromptTemplates::visualConceptSystem(),
+                $systemPrompt,
                 $prompt,
                 PromptTemplates::visualConceptSchema(),
-                self::DEFAULT_MODEL,
+                $model,
                 $temperature
             );
         } catch (\Exception $e) {
             // Fallback
             $response = $this->openRouter->chat(
-                PromptTemplates::visualConceptSystem(),
+                $systemPrompt,
                 $prompt,
-                self::DEFAULT_MODEL,
+                $model,
                 $temperature
             );
 
