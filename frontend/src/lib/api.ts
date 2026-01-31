@@ -395,6 +395,23 @@ export const PIPELINE_TYPE_LABELS: Record<PipelineType, string> = {
   music_video: 'Music Video Pipeline',
 };
 
+// Combined helper to get label for any agent type
+export const getAgentTypeLabel = (agentType: string): string => {
+  if (agentType in AGENT_TYPE_LABELS) {
+    return AGENT_TYPE_LABELS[agentType as AgentType];
+  }
+  if (agentType in MUSIC_VIDEO_AGENT_TYPE_LABELS) {
+    return MUSIC_VIDEO_AGENT_TYPE_LABELS[agentType as MusicVideoAgentType];
+  }
+  return agentType;
+};
+
+// Combined all agent type labels
+export const ALL_AGENT_TYPE_LABELS: Record<string, string> = {
+  ...AGENT_TYPE_LABELS,
+  ...MUSIC_VIDEO_AGENT_TYPE_LABELS,
+};
+
 // Projects API
 export const projectsApi = {
   list: (params?: { page?: string; status?: string }) =>
@@ -490,7 +507,14 @@ export const pipelinesApi = {
 
   create: (
     projectId: number,
-    data: { mode?: 'auto' | 'manual'; theme?: string; duration?: number; platform?: string }
+    data: {
+      pipeline_type?: PipelineType;
+      mode?: 'auto' | 'manual';
+      theme?: string;
+      song_brief?: string;
+      duration?: number;
+      platform?: string;
+    }
   ) => apiClient.post<{ message: string; pipeline: Pipeline }>(`/pipelines/project/${projectId}`, data),
 
   get: (id: number) => apiClient.get<{ pipeline: Pipeline }>(`/pipelines/${id}`),

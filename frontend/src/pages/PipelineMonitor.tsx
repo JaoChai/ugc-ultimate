@@ -250,6 +250,7 @@ export default function PipelineMonitor() {
               stepsState={stepsState}
               onStepClick={pipeline.mode === 'manual' ? handleRunStep : undefined}
               mode={pipeline.mode}
+              pipelineType={pipeline.pipeline_type}
             />
           </CardContent>
         </Card>

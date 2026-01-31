@@ -15,6 +15,7 @@ const Projects = lazy(() => import('@/pages/Projects'));
 const CreateProject = lazy(() => import('@/pages/CreateProject'));
 const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
 const PipelineMonitor = lazy(() => import('@/pages/PipelineMonitor'));
+const MusicVideos = lazy(() => import('@/pages/MusicVideos'));
 const Channels = lazy(() => import('@/pages/Channels'));
 const Settings = lazy(() => import('@/pages/settings/Settings'));
 const ApiKeys = lazy(() => import('@/pages/settings/ApiKeys'));
@@ -61,6 +62,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <ProjectDetail />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/music-videos"
+              element={
+                <ProtectedRoute>
+                  <MusicVideos />
                 </ProtectedRoute>
               }
             />

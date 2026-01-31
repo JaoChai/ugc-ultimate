@@ -1,16 +1,32 @@
 import { memo } from 'react';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PIPELINE_STEPS, AGENT_TYPE_LABELS, type AgentType } from '@/lib/api';
+import {
+  PIPELINE_STEPS,
+  MUSIC_VIDEO_AGENT_TYPES,
+  getAgentTypeLabel,
+  type PipelineType,
+} from '@/lib/api';
 
 interface PipelineStepsProps {
   currentStep: string | null;
   stepsState: Record<string, { status: string; progress: number }>;
-  onStepClick?: (step: AgentType) => void;
+  onStepClick?: (step: string) => void;
   mode?: 'auto' | 'manual';
+  pipelineType?: PipelineType;
 }
 
-export const PipelineSteps = memo(function PipelineSteps({ currentStep, stepsState, onStepClick, mode = 'auto' }: PipelineStepsProps) {
+export const PipelineSteps = memo(function PipelineSteps({
+  currentStep,
+  stepsState,
+  onStepClick,
+  mode = 'auto',
+  pipelineType = 'video',
+}: PipelineStepsProps) {
+  // Get steps based on pipeline type
+  const steps: readonly string[] = pipelineType === 'music_video'
+    ? MUSIC_VIDEO_AGENT_TYPES
+    : PIPELINE_STEPS;
   const getStepStatus = (step: string) => {
     const state = stepsState[step];
     if (!state) return 'pending';
@@ -39,7 +55,7 @@ export const PipelineSteps = memo(function PipelineSteps({ currentStep, stepsSta
 
   return (
     <div className="flex items-center justify-between">
-      {PIPELINE_STEPS.map((step, index) => (
+      {steps.map((step, index) => (
         <div key={step} className="flex items-center">
           <button
             onClick={() => mode === 'manual' && onStepClick?.(step)}
@@ -62,17 +78,17 @@ export const PipelineSteps = memo(function PipelineSteps({ currentStep, stepsSta
               {getStepIcon(step)}
             </div>
             <div className="text-center">
-              <p className="text-xs font-medium">{AGENT_TYPE_LABELS[step]}</p>
+              <p className="text-xs font-medium">{getAgentTypeLabel(step)}</p>
               {getStepStatus(step) === 'running' && (
                 <p className="text-xs text-blue-500">{getStepProgress(step)}%</p>
               )}
             </div>
           </button>
-          {index < PIPELINE_STEPS.length - 1 && (
+          {index < steps.length - 1 && (
             <div
               className={cn(
                 'h-0.5 w-8 mx-2',
-                getStepStatus(PIPELINE_STEPS[index + 1]) !== 'pending' ||
+                getStepStatus(steps[index + 1]) !== 'pending' ||
                   getStepStatus(step) === 'completed'
                   ? 'bg-green-500'
                   : 'bg-muted-foreground/30'

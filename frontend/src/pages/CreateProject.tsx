@@ -25,14 +25,18 @@ import {
   ChevronLeft,
   Loader2,
   Check,
+  Video,
 } from 'lucide-react';
+import type { PipelineType } from '@/lib/api';
 
 type Step = 'basic' | 'concept' | 'options' | 'review';
 
 interface ProjectConfig {
   title: string;
   description: string;
+  pipelineType: PipelineType;
   theme: string;
+  songBrief: string;
   duration: number;
   audience: string;
   platform: string;
@@ -49,7 +53,9 @@ interface ProjectConfig {
 const defaultConfig: ProjectConfig = {
   title: '',
   description: '',
+  pipelineType: 'video',
   theme: '',
+  songBrief: '',
   duration: 60,
   audience: 'general',
   platform: 'YouTube',
@@ -88,6 +94,9 @@ export default function CreateProject() {
       case 'basic':
         return config.title.trim().length > 0;
       case 'concept':
+        if (config.pipelineType === 'music_video') {
+          return config.songBrief.trim().length > 0;
+        }
         return config.theme.trim().length > 0 || config.title.trim().length > 0;
       case 'options':
         return true;
@@ -126,20 +135,39 @@ export default function CreateProject() {
       const projectId = projectRes.project.id;
 
       if (config.autoGenerate) {
-        // Start full generation workflow (Concept → Music + Images)
-        await api.projects.generateAll(projectId, {
-          theme: config.theme || config.title,
-          duration: config.duration,
-          audience: config.audience,
-          platform: config.platform,
-          language: config.language,
-          scene_count: config.sceneCount,
-          aspect_ratio: config.aspectRatio,
-          visual_style: config.visualStyle,
-          music_provider: config.musicProvider,
-          image_provider: config.imageProvider,
-          image_resolution: config.imageResolution,
-        });
+        if (config.pipelineType === 'music_video') {
+          // Music Video Pipeline: Create and start pipeline
+          const pipelineRes = await api.pipelines.create(projectId, {
+            pipeline_type: 'music_video',
+            mode: 'auto',
+            song_brief: config.songBrief,
+            theme: config.songBrief, // Use song_brief as theme fallback
+            duration: config.duration,
+            platform: config.platform.toLowerCase(),
+          });
+
+          // Start pipeline
+          await api.pipelines.start(pipelineRes.pipeline.id);
+
+          // Navigate to pipeline monitor
+          navigate(`/pipelines/${pipelineRes.pipeline.id}`);
+          return;
+        } else {
+          // Video Pipeline: Start full generation workflow (Concept → Music + Images)
+          await api.projects.generateAll(projectId, {
+            theme: config.theme || config.title,
+            duration: config.duration,
+            audience: config.audience,
+            platform: config.platform,
+            language: config.language,
+            scene_count: config.sceneCount,
+            aspect_ratio: config.aspectRatio,
+            visual_style: config.visualStyle,
+            music_provider: config.musicProvider,
+            image_provider: config.imageProvider,
+            image_resolution: config.imageResolution,
+          });
+        }
       }
 
       navigate(`/projects/${projectId}`);
@@ -227,25 +255,91 @@ export default function CreateProject() {
                     rows={3}
                   />
                 </div>
+
+                {/* Pipeline Type Selector */}
+                <div className="space-y-3 pt-4">
+                  <Label>Pipeline Type</Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => updateConfig('pipelineType', 'video')}
+                      className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                        config.pipelineType === 'video'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-muted hover:border-muted-foreground/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${config.pipelineType === 'video' ? 'bg-primary/10' : 'bg-muted'}`}>
+                          <Video className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium">Video Pipeline</p>
+                          <p className="text-xs text-muted-foreground">Theme-based video with music & images</p>
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateConfig('pipelineType', 'music_video')}
+                      className={`p-4 border-2 rounded-lg text-left transition-colors ${
+                        config.pipelineType === 'music_video'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-muted hover:border-muted-foreground/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${config.pipelineType === 'music_video' ? 'bg-primary/10' : 'bg-muted'}`}>
+                          <Music className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium">Music Video Pipeline</p>
+                          <p className="text-xs text-muted-foreground">Song-first approach with AI music</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
               </>
             )}
 
             {/* Concept Step */}
             {step === 'concept' && (
               <>
-                <div className="space-y-2">
-                  <Label htmlFor="theme">Theme / Topic *</Label>
-                  <Textarea
-                    id="theme"
-                    placeholder="e.g., A dreamy journey through neon-lit city streets at midnight, with themes of hope and new beginnings..."
-                    value={config.theme}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateConfig('theme', e.target.value)}
-                    rows={4}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Describe the mood, setting, and story for your content
-                  </p>
-                </div>
+                {/* Theme field - show only for video pipeline */}
+                {config.pipelineType === 'video' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="theme">Theme / Topic *</Label>
+                    <Textarea
+                      id="theme"
+                      placeholder="e.g., A dreamy journey through neon-lit city streets at midnight, with themes of hope and new beginnings..."
+                      value={config.theme}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateConfig('theme', e.target.value)}
+                      rows={4}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Describe the mood, setting, and story for your content
+                    </p>
+                  </div>
+                )}
+
+                {/* Song Brief field - show only for music_video pipeline */}
+                {config.pipelineType === 'music_video' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="songBrief">Song Brief *</Label>
+                    <Textarea
+                      id="songBrief"
+                      placeholder="e.g., An upbeat pop song about summer love, with catchy chorus, female vocals, 120 BPM, tropical vibes..."
+                      value={config.songBrief}
+                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateConfig('songBrief', e.target.value)}
+                      rows={6}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Describe the song you want: genre, mood, tempo, lyrics theme, vocal style.
+                      AI will generate multiple versions for you to choose.
+                    </p>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -465,9 +559,27 @@ export default function CreateProject() {
                         <dd>{config.title}</dd>
                       </div>
                       <div className="flex justify-between">
-                        <dt className="text-muted-foreground">Theme</dt>
-                        <dd className="max-w-xs truncate">{config.theme || config.title}</dd>
+                        <dt className="text-muted-foreground">Pipeline Type</dt>
+                        <dd className="flex items-center gap-1">
+                          {config.pipelineType === 'music_video' ? (
+                            <><Music className="h-3 w-3" /> Music Video</>
+                          ) : (
+                            <><Video className="h-3 w-3" /> Video</>
+                          )}
+                        </dd>
                       </div>
+                      {config.pipelineType === 'video' && (
+                        <div className="flex justify-between">
+                          <dt className="text-muted-foreground">Theme</dt>
+                          <dd className="max-w-xs truncate">{config.theme || config.title}</dd>
+                        </div>
+                      )}
+                      {config.pipelineType === 'music_video' && (
+                        <div className="flex justify-between">
+                          <dt className="text-muted-foreground">Song Brief</dt>
+                          <dd className="max-w-xs truncate">{config.songBrief}</dd>
+                        </div>
+                      )}
                     </dl>
                   </div>
 

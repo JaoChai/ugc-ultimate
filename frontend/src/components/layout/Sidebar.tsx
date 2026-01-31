@@ -9,6 +9,7 @@ import {
   ChevronRight,
   X,
   Menu,
+  Music,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Projects', href: '/projects', icon: FolderKanban },
+  { name: 'Music Videos', href: '/music-videos', icon: Music },
   { name: 'Channels', href: '/channels', icon: Tv2 },
   { name: 'API Keys', href: '/settings/api-keys', icon: Key },
   { name: 'Settings', href: '/settings', icon: Settings, end: true },

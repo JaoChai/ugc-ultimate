@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import type { PipelineLog } from '@/lib/api';
-import { AGENT_TYPE_LABELS, type AgentType } from '@/lib/api';
+import { getAgentTypeLabel } from '@/lib/api';
 import { Brain, Info, AlertCircle, CheckCircle2, TrendingUp } from 'lucide-react';
 
 interface PipelineLogsProps {
@@ -62,7 +62,7 @@ export const PipelineLogs = memo(function PipelineLogs({ logs, maxHeight = '400p
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
                 <span className="font-medium">
-                  {AGENT_TYPE_LABELS[log.agent_type as AgentType] || log.agent_type}
+                  {getAgentTypeLabel(log.agent_type)}
                 </span>
                 <span>•</span>
                 <span>{new Date(log.created_at).toLocaleTimeString()}</span>
