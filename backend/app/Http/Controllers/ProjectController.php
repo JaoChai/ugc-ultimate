@@ -8,6 +8,7 @@ use App\Jobs\GenerateMusicJob;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ProjectController extends Controller
 {
@@ -101,10 +102,31 @@ class ProjectController extends Controller
         // Update project status
         $project->update(['status' => 'processing']);
 
-        // Dispatch concept generation job
-        GenerateConceptJob::dispatch($project->id, array_merge($validated, [
-            'theme' => $validated['theme'] ?? $project->title,
-        ]));
+        // Dispatch concept generation job with error handling
+        try {
+            Log::info('Dispatching GenerateConceptJob', ['project_id' => $project->id]);
+
+            GenerateConceptJob::dispatch($project->id, array_merge($validated, [
+                'theme' => $validated['theme'] ?? $project->title,
+            ]));
+
+            Log::info('GenerateConceptJob dispatched successfully', ['project_id' => $project->id]);
+        } catch (\Exception $e) {
+            Log::error('Failed to dispatch GenerateConceptJob', [
+                'project_id' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $project->update([
+                'status' => 'failed',
+                'error_message' => 'Failed to queue concept generation: ' . $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to start concept generation',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Concept generation started',
@@ -144,8 +166,29 @@ class ProjectController extends Controller
         // Update project status
         $project->update(['status' => 'processing']);
 
-        // Dispatch music generation job
-        GenerateMusicJob::dispatch($project->id, $validated);
+        // Dispatch music generation job with error handling
+        try {
+            Log::info('Dispatching GenerateMusicJob', ['project_id' => $project->id]);
+
+            GenerateMusicJob::dispatch($project->id, $validated);
+
+            Log::info('GenerateMusicJob dispatched successfully', ['project_id' => $project->id]);
+        } catch (\Exception $e) {
+            Log::error('Failed to dispatch GenerateMusicJob', [
+                'project_id' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $project->update([
+                'status' => 'failed',
+                'error_message' => 'Failed to queue music generation: ' . $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to start music generation',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Music generation started',
@@ -185,13 +228,40 @@ class ProjectController extends Controller
         // Update project status
         $project->update(['status' => 'processing']);
 
-        // Dispatch image generation jobs
-        foreach ($validated['prompts'] as $imageConfig) {
-            GenerateImageJob::dispatch($project->id, array_merge($imageConfig, [
-                'provider' => $validated['provider'] ?? 'nano-banana-pro',
-                'aspect_ratio' => $validated['aspect_ratio'] ?? '16:9',
-                'resolution' => $validated['resolution'] ?? '1K',
-            ]));
+        // Dispatch image generation jobs with error handling
+        try {
+            Log::info('Dispatching GenerateImageJobs', [
+                'project_id' => $project->id,
+                'image_count' => count($validated['prompts']),
+            ]);
+
+            foreach ($validated['prompts'] as $imageConfig) {
+                GenerateImageJob::dispatch($project->id, array_merge($imageConfig, [
+                    'provider' => $validated['provider'] ?? 'nano-banana-pro',
+                    'aspect_ratio' => $validated['aspect_ratio'] ?? '16:9',
+                    'resolution' => $validated['resolution'] ?? '1K',
+                ]));
+            }
+
+            Log::info('GenerateImageJobs dispatched successfully', [
+                'project_id' => $project->id,
+                'image_count' => count($validated['prompts']),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to dispatch GenerateImageJobs', [
+                'project_id' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $project->update([
+                'status' => 'failed',
+                'error_message' => 'Failed to queue image generation: ' . $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to start image generation',
+                'message' => $e->getMessage(),
+            ], 500);
         }
 
         return response()->json([
@@ -277,11 +347,32 @@ class ProjectController extends Controller
             ]),
         ]);
 
-        // Dispatch concept generation with auto_generate flag
-        GenerateConceptJob::dispatch($project->id, array_merge($validated, [
-            'theme' => $validated['theme'] ?? $project->title,
-            'auto_generate' => true,
-        ]));
+        // Dispatch concept generation with auto_generate flag and error handling
+        try {
+            Log::info('Dispatching GenerateConceptJob (full workflow)', ['project_id' => $project->id]);
+
+            GenerateConceptJob::dispatch($project->id, array_merge($validated, [
+                'theme' => $validated['theme'] ?? $project->title,
+                'auto_generate' => true,
+            ]));
+
+            Log::info('GenerateConceptJob (full workflow) dispatched successfully', ['project_id' => $project->id]);
+        } catch (\Exception $e) {
+            Log::error('Failed to dispatch GenerateConceptJob (full workflow)', [
+                'project_id' => $project->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $project->update([
+                'status' => 'failed',
+                'error_message' => 'Failed to queue full generation workflow: ' . $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'error' => 'Failed to start full generation workflow',
+                'message' => $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Full generation workflow started',

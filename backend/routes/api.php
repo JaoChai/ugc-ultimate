@@ -4,10 +4,18 @@ use App\Http\Controllers\AgentConfigController;
 use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ChannelController;
+use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PipelineController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
+
+// Health check routes (public)
+Route::prefix('health')->group(function () {
+    Route::get('/', [HealthController::class, 'index']);
+    Route::get('/queue', [HealthController::class, 'queue']);
+    Route::get('/database', [HealthController::class, 'database']);
+});
 
 // Public routes
 Route::prefix('auth')->group(function () {
