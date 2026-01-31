@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Exceptions\R2StorageException;
 use App\Models\Asset;
 use App\Models\JobLog;
 use App\Models\Project;
@@ -132,10 +133,31 @@ class ProcessKieWebhookJob implements ShouldQueue
                 'asset_id' => $asset->id,
                 'url' => $permanentUrl,
             ]);
-        } catch (\Exception $e) {
-            Log::error('Failed to upload asset to R2', [
+        } catch (R2StorageException $e) {
+            // R2 storage errors - re-throw to trigger job retry
+            Log::warning('R2 upload failed, job will retry', [
                 'asset_id' => $asset->id,
                 'error' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+                'is_retryable' => $e->isRetryable(),
+                'attempt' => $this->attempts(),
+            ]);
+
+            throw $e; // Re-throw to trigger job retry
+        } catch (\Exception $e) {
+            // Other errors - log and mark asset as failed but don't retry
+            Log::error('Failed to process asset (non-retryable)', [
+                'asset_id' => $asset->id,
+                'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+            ]);
+
+            // Update asset to indicate failure
+            $asset->update([
+                'metadata' => array_merge($asset->metadata ?? [], [
+                    'error' => $e->getMessage(),
+                    'failed_at' => now()->toISOString(),
+                ]),
             ]);
         }
     }

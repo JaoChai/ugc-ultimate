@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Exceptions\R2StorageException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -332,14 +334,70 @@ class FFMpegService
     }
 
     /**
-     * Upload video to R2 storage
+     * Upload video to R2 storage with proper error handling
      */
     protected function uploadToR2(string $localPath, string $jobId): string
     {
-        $filename = "videos/{$jobId}.mp4";
-        $content = file_get_contents($localPath);
+        $r2Path = "videos/{$jobId}.mp4";
 
-        return $this->r2Storage->upload($filename, $content, 'video/mp4');
+        Log::info('FFMpegService: Uploading video to R2', [
+            'local_path' => $localPath,
+            'r2_path' => $r2Path,
+            'file_size' => filesize($localPath),
+        ]);
+
+        try {
+            // Use stream for memory efficiency with large video files
+            $stream = fopen($localPath, 'rb');
+
+            if ($stream === false) {
+                throw new \RuntimeException("Cannot open file for reading: {$localPath}");
+            }
+
+            try {
+                // Read file content from stream
+                $content = stream_get_contents($stream);
+
+                if ($content === false) {
+                    throw new \RuntimeException("Failed to read file content: {$localPath}");
+                }
+
+                $url = $this->r2Storage->upload($content, $r2Path, 'video/mp4');
+
+                Log::info('FFMpegService: Video uploaded to R2 successfully', [
+                    'r2_path' => $r2Path,
+                    'url' => $url,
+                ]);
+
+                return $url;
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+        } catch (R2StorageException $e) {
+            Log::error('FFMpegService: R2 upload failed', [
+                'r2_path' => $r2Path,
+                'error' => $e->getMessage(),
+                'error_code' => $e->getCode(),
+                'context' => $e->getContext(),
+            ]);
+
+            throw $e; // Re-throw to let caller handle
+        } catch (\Exception $e) {
+            Log::error('FFMpegService: Unexpected error during R2 upload', [
+                'r2_path' => $r2Path,
+                'error' => $e->getMessage(),
+                'exception_class' => get_class($e),
+            ]);
+
+            throw new R2StorageException(
+                "Failed to upload video to R2: {$e->getMessage()}",
+                R2StorageException::CODE_UPLOAD_FAILED,
+                $e,
+                ['r2_path' => $r2Path, 'local_path' => $localPath]
+            );
+        }
     }
 
     /**

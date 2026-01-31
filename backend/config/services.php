@@ -41,6 +41,13 @@ return [
         'secret_access_key' => env('R2_SECRET_ACCESS_KEY'),
         'bucket' => env('R2_BUCKET', 'ugc-ultimate'),
         'public_url' => env('R2_PUBLIC_URL'),
+        // Upload limits and timeouts
+        'max_file_size' => env('R2_MAX_FILE_SIZE', 100 * 1024 * 1024), // 100MB default
+        'upload_timeout' => env('R2_UPLOAD_TIMEOUT', 120), // seconds
+        'download_timeout' => env('R2_DOWNLOAD_TIMEOUT', 180), // seconds for large files
+        // Retry configuration
+        'retry_attempts' => env('R2_RETRY_ATTEMPTS', 3),
+        'retry_delay' => env('R2_RETRY_DELAY', 2), // base delay in seconds
     ],
 
     'kie' => [
