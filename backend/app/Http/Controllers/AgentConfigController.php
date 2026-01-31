@@ -24,7 +24,7 @@ class AgentConfigController extends Controller
         return response()->json([
             'configs' => $configs,
             'grouped' => $grouped,
-            'agent_types' => AgentConfig::AGENT_TYPES,
+            'agent_types' => AgentConfig::ALL_AGENT_TYPES,
         ]);
     }
 
@@ -34,7 +34,7 @@ class AgentConfigController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'agent_type' => ['required', 'string', 'in:' . implode(',', AgentConfig::AGENT_TYPES)],
+            'agent_type' => ['required', 'string', 'in:' . implode(',', AgentConfig::ALL_AGENT_TYPES)],
             'name' => ['required', 'string', 'max:100'],
             'system_prompt' => ['required', 'string', 'max:10000'],
             'model' => ['nullable', 'string', 'max:100'],
@@ -165,7 +165,7 @@ class AgentConfigController extends Controller
      */
     public function getDefaultPrompt(string $agentType): JsonResponse
     {
-        if (!in_array($agentType, AgentConfig::AGENT_TYPES)) {
+        if (!in_array($agentType, AgentConfig::ALL_AGENT_TYPES)) {
             return response()->json(['error' => 'Invalid agent type'], 400);
         }
 
